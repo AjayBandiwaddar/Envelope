@@ -1,0 +1,36 @@
+# --- Environments / secrets ---
+.env
+*.env
+!.env.example
+.venv/
+venv/
+
+# --- Python / Django ---
+__pycache__/
+*.py[cod]
+*.sqlite3
+db.sqlite3
+staticfiles/
+media/
+.pytest_cache/
+*.egg-info/
+
+# --- Node / React ---
+node_modules/
+dist/
+dist-ssr/
+*.local
+.vite/
+
+# --- Docker ---
+*.pid
+
+# --- OS / editor ---
+.DS_Store
+.idea/
+.vscode/
+*.swp
+
+# --- Benchmark raw output (keep summarized results only, per BENCHMARK_PLAN.md §26) ---
+benchmarks/results/*.raw
+benchmarks/results/*.log
