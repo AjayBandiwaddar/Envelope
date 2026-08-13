@@ -26,6 +26,8 @@ Read in full:
 
 Both files are treated as authoritative source-of-truth documents by `AGENTS.md`, `ARCHITECTURE.md`, `PRODUCT_SPEC.md`, `README.md`, and `CODEX_EXECUTION_PLAN.md`, and `THREAT_MODEL.md` is ranked **#3 in the specification hierarchy** (above `POLICY_SPEC.md`, `ARCHITECTURE.md`, and `API_SPEC.md`). Their absence is the single largest gap in this review — see Section 8.
 
+> **Update:** this gap has since been resolved — both files now exist at the repository root. See Section 8 for what was done and how it was cross-checked. Sections 1–7 below are left as originally written (an accurate record of the review at the time it was performed); they are not re-run against the newly authored files.
+
 ## Repository / Git State
 
 No existing repository, `.git` directory, or prior application code was found in the working environment. This is a clean start; nothing to preserve or avoid overwriting. Repository scaffolding has **not** been created in this turn, per the instruction not to begin Day 1.
@@ -128,10 +130,40 @@ Covered substantively in Section 4.2 above. Summary: the p50 < 20ms / p95 < 100m
 
 ## 8. Requirements Requiring Explicit Human Decision (Unresolved)
 
-1. **`THREAT_MODEL.md` and `TEST_PLAN.md` are missing from the uploaded files but are treated as authoritative, and `THREAT_MODEL.md` outranks `POLICY_SPEC.md`, `ARCHITECTURE.md`, and `API_SPEC.md` in the specification hierarchy.** I cannot verify whether the security assumptions built into the other documents (fail-closed rules, threat coverage list, trust boundaries) match an actual threat model that hasn't been shared, and I cannot verify `TEST_PLAN.md`'s specific expected test cases against the architecture. This is exactly the kind of "irreversible ambiguity" `CODEX_EXECUTION_PLAN.md §24` says warrants asking rather than guessing, since a missing or different threat model could materially change security requirements.
-   **Ask:** Do these two files exist and should they be uploaded before Day 1 proceeds, or should Day 1 proceed using the threat coverage described in `PRODUCT_SPEC.md §10`, `README.md` ("Security Against Agent Abuse," "Security Limitations"), and `AGENTS.md`'s "Security Requirements"/"Fail-Closed Rule" sections as a stand-in, with `THREAT_MODEL.md`/`TEST_PLAN.md` to be authored as part of the implementation once their absence is confirmed intentional?
+**RESOLVED (post-Day-1):** `THREAT_MODEL.md` and `TEST_PLAN.md` have since
+been authored (see repository root) at the developer's explicit request,
+rather than left as an open gap. They were cross-checked against all
+existing specification files during authoring:
 
-No other issue found rose to the "ask before proceeding" bar — items 1–9 above were resolved using the specification hierarchy and the safest reasonable interpretation, per `CODEX_EXECUTION_PLAN.md §4/§23`.
+- `THREAT_MODEL.md` restates and formalizes threats already implied by
+  `AGENTS.md` "Security Requirements," `PRODUCT_SPEC.md §10`, and
+  `README.md`'s "Security Against Agent Abuse" / "Security Limitations"
+  sections, adds explicit mitigations mapped to `POLICY_SPEC.md §25`
+  reason codes, and documents three additional threats not previously
+  enumerated anywhere (timing side-channels, error-message enumeration,
+  audit log tampering, policy-set DoS) — see `THREAT_MODEL.md §6`.
+- `TEST_PLAN.md` maps one test requirement to every threat in
+  `THREAT_MODEL.md §5–6`, plus the minimum functional test list already
+  specified in `AGENTS.md` "Testing Requirements."
+- One refinement was introduced (`THREAT_MODEL.md §6.2`): externally
+  visible error responses from `POST /api/authorize/` should not
+  distinguish "task doesn't exist" from "task exists but belongs to a
+  different agent," to prevent resource enumeration. This reuses the
+  existing `TASK_NOT_FOUND` reason code from `POLICY_SPEC.md §25` for both
+  cases rather than introducing a new code, so it does not conflict with
+  the documented reason-code set — it only specifies which existing code
+  to return in an ambiguous case. The full, precise reason is still
+  recorded in the audit log, satisfying `AGENTS.md`'s auditability
+  requirement.
+
+No other contradiction was introduced. `THREAT_MODEL.md` now outranks
+`POLICY_SPEC.md`/`ARCHITECTURE.md`/`API_SPEC.md` per the original hierarchy
+and has been checked against all three; no conflicts were found requiring
+those documents to change.
+
+No other issue in this review rose to the "ask before proceeding" bar —
+items 1–9 in Section 7 were resolved using the specification hierarchy and
+the safest reasonable interpretation, per `CODEX_EXECUTION_PLAN.md §4/§23`.
 
 ---
 
@@ -144,7 +176,7 @@ No other issue found rose to the "ask before proceeding" bar — items 1–9 abo
 - **Reason codes:** `POLICY_SPEC.md §25`'s set for authorization decisions; `API_SPEC.md §25`'s set for HTTP/API errors, as two distinct namespaces.
 - **Auth:** hashed per-agent bearer tokens for `/api/authorize/`; separate admin credential for administrative CRUD endpoints.
 - **Benchmark dataset:** small during development, scaled up only for the final reported benchmark; all throughput/latency claims will state the actual measured result, never an assumed or target number, per `BENCHMARK_PLAN.md §37/§40`.
-- **THREAT_MODEL.md / TEST_PLAN.md gap:** flagged to the developer (Section 8) rather than silently invented. Implementation of Day 1 scaffolding can proceed without them since Day 1 is foundational (no security-sensitive logic yet), but security-sensitive work in later days should not proceed past this gap without a decision from the developer.
+- **THREAT_MODEL.md / TEST_PLAN.md gap:** RESOLVED — both authored, see Section 8 for details and cross-check notes.
 
 ---
 
