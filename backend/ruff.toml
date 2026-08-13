@@ -1,0 +1,9 @@
+[lint]
+select = ["E", "F", "I"]
+ignore = ["E501"]  # line length handled by formatter, not the linter
+
+[lint.per-file-ignores]
+"*/migrations/*.py" = ["E501", "F401"]
+
+[format]
+quote-style = "double"

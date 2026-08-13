@@ -9,7 +9,6 @@ per ARCHITECTURE.md §22 and AGENTS.md "Data Handling" / "Coding Rules".
 Never hard-code production secrets here.
 """
 
-import os
 from pathlib import Path
 
 import environ

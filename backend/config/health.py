@@ -11,14 +11,13 @@ These are intentionally cross-cutting (not owned by any single domain app)
 so they live alongside the project config rather than inside apps/*.
 """
 
+import redis
+from django.conf import settings
 from django.db import connections
 from django.db.utils import OperationalError
 from rest_framework.decorators import api_view, permission_classes
 from rest_framework.permissions import AllowAny
 from rest_framework.response import Response
-
-import redis
-from django.conf import settings
 
 
 @api_view(["GET"])
