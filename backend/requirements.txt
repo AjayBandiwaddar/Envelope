@@ -1,4 +1,4 @@
-Django==6.1
+Django==5.2.7
 Pygments==2.20.0
 annotated-types==0.8.0
 asgiref==3.12.1
@@ -15,6 +15,7 @@ pytest-django==4.14.0
 pytest==9.1.1
 python-dotenv==1.2.2
 redis==8.1.0
+ruff==0.16.2
 sqlparse==0.5.5
 typing-inspection==0.4.4
 typing_extensions==4.16.0
