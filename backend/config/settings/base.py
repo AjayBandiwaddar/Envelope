@@ -75,6 +75,7 @@ MIDDLEWARE = [
     "django.contrib.auth.middleware.AuthenticationMiddleware",
     "django.contrib.messages.middleware.MessageMiddleware",
     "django.middleware.clickjacking.XFrameOptionsMiddleware",
+    "config.middleware.RequestIDMiddleware",
 ]
 
 ROOT_URLCONF = "config.urls"
@@ -120,7 +121,8 @@ REDIS_URL = env("REDIS_URL", default="redis://localhost:6379/0")
 
 REST_FRAMEWORK = {
     "DEFAULT_AUTHENTICATION_CLASSES": [
-        "rest_framework.authentication.SessionAuthentication",
+        "apps.agents.authentication.AdminTokenAuthentication",
+        "apps.agents.authentication.AgentBearerTokenAuthentication",
     ],
     "DEFAULT_PERMISSION_CLASSES": [
         "rest_framework.permissions.IsAuthenticated",
@@ -131,7 +133,19 @@ REST_FRAMEWORK = {
     "DEFAULT_PARSER_CLASSES": [
         "rest_framework.parsers.JSONParser",
     ],
+    "EXCEPTION_HANDLER": "config.exceptions.api_exception_handler",
 }
+
+# Shared secret for administrative endpoints (docs/SPEC_REVIEW.md Section
+# 3.1). Generate a real random value for anything beyond local dev - see
+# .env.example.
+ADMIN_API_TOKEN = env("ADMIN_API_TOKEN", default="dev-admin-token-change-me")
+
+# Default task lifetime when a caller doesn't specify expires_at
+# (API_SPEC.md Section 8.1's create-task example doesn't show an
+# expires_at field in the request; this fills that gap - documented
+# assumption, see apps/tasks/serializers.py).
+DEFAULT_TASK_DURATION_MINUTES = env.int("DEFAULT_TASK_DURATION_MINUTES", default=30)
 
 DATA_UPLOAD_MAX_MEMORY_SIZE = env.int("DATA_UPLOAD_MAX_MEMORY_SIZE", default=1 * 1024 * 1024)  # 1 MB, API_SPEC.md §28
 
