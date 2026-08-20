@@ -67,3 +67,27 @@ class Tool(models.Model):
 
     def is_active(self) -> bool:
         return self.status == ToolStatus.ACTIVE
+
+
+class ToolExecution(models.Model):
+    """
+    A persistent record that a tool actually executed (or was rejected).
+    Exists so tests - and a human running curl/psql - can prove whether
+    execution happened, per CODEX_EXECUTION_PLAN.md Day 3: 'Create
+    execution counters/state for mock tools so tests can prove whether
+    execution happened.' A DB row survives across requests and processes,
+    which an in-memory counter would not.
+    """
+
+    tool_id = models.CharField(max_length=100)
+    action = models.CharField(max_length=100)
+    request_id = models.CharField(max_length=64, blank=True, default="")
+    arguments = models.JSONField(default=dict, blank=True)
+    result = models.JSONField(default=dict, blank=True)
+    executed_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        ordering = ["-executed_at"]
+
+    def __str__(self) -> str:
+        return f"{self.tool_id} @ {self.executed_at}"
