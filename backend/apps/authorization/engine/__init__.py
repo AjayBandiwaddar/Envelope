@@ -9,7 +9,7 @@ package.
 """
 
 from .evaluator import evaluate
-from .reason_codes import ReasonCode
+from .reason_codes import DEFAULT_REASON_TEXT, ReasonCode
 from .types import (
     AgentSnapshot,
     AuthorizationDecision,
@@ -27,6 +27,7 @@ from .types import (
 
 __all__ = [
     "evaluate",
+    "DEFAULT_REASON_TEXT",
     "ReasonCode",
     "AgentSnapshot",
     "AuthorizationDecision",

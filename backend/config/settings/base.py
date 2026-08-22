@@ -147,6 +147,12 @@ ADMIN_API_TOKEN = env("ADMIN_API_TOKEN", default="dev-admin-token-change-me")
 # assumption, see apps/tasks/serializers.py).
 DEFAULT_TASK_DURATION_MINUTES = env.int("DEFAULT_TASK_DURATION_MINUTES", default=30)
 
+# Per-agent rate limiting (apps/authorization/rate_limit.py). Generous
+# defaults so normal demo/benchmark traffic isn't affected; tighten for
+# any real deployment.
+RATE_LIMIT_MAX_REQUESTS = env.int("RATE_LIMIT_MAX_REQUESTS", default=100)
+RATE_LIMIT_WINDOW_SECONDS = env.int("RATE_LIMIT_WINDOW_SECONDS", default=60)
+
 DATA_UPLOAD_MAX_MEMORY_SIZE = env.int("DATA_UPLOAD_MAX_MEMORY_SIZE", default=1 * 1024 * 1024)  # 1 MB, API_SPEC.md §28
 
 # ---------------------------------------------------------------------------

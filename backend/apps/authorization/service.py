@@ -18,6 +18,7 @@ from django.utils import timezone
 from apps.agents.models import Agent
 from apps.audit.models import AuditEvent
 from apps.authorization import engine as eng
+from apps.authorization.rate_limit import is_rate_limited
 from apps.policies.models import Policy
 from apps.tasks.models import Task
 from apps.tools.models import Tool
@@ -114,6 +115,28 @@ def authorize(
         resource_id=resource_id,
         parameters=parameters or {},
     )
+
+    if is_rate_limited(agent_id):
+        decision = eng.AuthorizationDecision(
+            decision=eng.Decision.DENY,
+            reason_code=eng.ReasonCode.RATE_LIMIT_EXCEEDED,
+            reason=eng.DEFAULT_REASON_TEXT[eng.ReasonCode.RATE_LIMIT_EXCEEDED],
+            policy_id=None,
+        )
+        latency_ms = (time.perf_counter() - start) * 1000
+        return _persist_audit_event(
+            decision=decision,
+            request_id=request_id,
+            agent_id=agent_id,
+            user_id=user_id,
+            task_id=task_id,
+            tool_id=tool_id,
+            action=action,
+            resource_type=resource_type,
+            resource_id=resource_id,
+            parameters=parameters or {},
+            latency_ms=latency_ms,
+        )
 
     agent = Agent.objects.filter(agent_id=agent_id).first()
     task = Task.objects.select_related("agent").filter(task_id=task_id).first()
