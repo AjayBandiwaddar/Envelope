@@ -83,8 +83,53 @@ def delete_customer(arguments: dict) -> dict:
         "customer_id": arguments.get("customer_id"),
         "status": "deleted",
     }
+def propose_purchase_intent(arguments: dict) -> dict:
+    """
+    Records what the agent wants to buy. No money moves, no inventory
+    is touched. The price is looked up from the canonical Product
+    record server-side - never taken from the agent's arguments -
+    which is what makes "we don't trust agent-supplied financial
+    values" true in code, not just in the pitch.
+    """
+    import uuid
+    from apps.commerce.models import Product, PurchaseIntent, PurchaseIntentStatus
+    from apps.tasks.models import Task
 
+    task_id = arguments.get("task_id")
+    product_id = arguments.get("product_id")
+    quantity = int(arguments.get("quantity", 1))
 
+    try:
+        task = Task.objects.select_related("agent").get(task_id=task_id)
+    except Task.DoesNotExist:
+        return {"status": "error", "reason": "TASK_NOT_FOUND"}
+    try:
+        product = Product.objects.get(product_id=product_id, active=True)
+    except Product.DoesNotExist:
+        return {"status": "error", "reason": "PRODUCT_NOT_FOUND_OR_INACTIVE"}
+
+    canonical_amount_minor = product.price_minor * quantity
+    intent = PurchaseIntent.objects.create(
+        intent_id=f"intent-{uuid.uuid4().hex[:12]}",
+        task=task,
+        agent_id=task.agent.agent_id,
+        user_id=task.user_id,
+        product=product,
+        quantity=quantity,
+        canonical_amount_minor=canonical_amount_minor,
+        currency=product.currency,
+        status=PurchaseIntentStatus.PENDING,
+    )
+    return {
+        "status": "ok",
+        "intent_id": intent.intent_id,
+        "product_id": product.product_id,
+        "product_name": product.name,
+        "quantity": quantity,
+        "canonical_amount_minor": canonical_amount_minor,
+        "currency": product.currency,
+        "intent_status": intent.status,
+    }
 TOOL_HANDLERS: dict[str, ToolHandler] = {
     "get_order": get_order,
     "refund_order": refund_order,
@@ -92,6 +137,7 @@ TOOL_HANDLERS: dict[str, ToolHandler] = {
     "get_customer": get_customer,
     "send_email": send_email,
     "delete_customer": delete_customer,
+    "propose_purchase_intent": propose_purchase_intent,
 }
 
 
@@ -110,4 +156,6 @@ DEFAULT_TOOLS = [
      "input_schema": {"to": {}, "subject": {}}},
     {"tool_id": "delete_customer", "name": "Delete Customer", "service": "customers", "risk_level": "HIGH",
      "input_schema": {"customer_id": {}}},
+    {"tool_id": "propose_purchase_intent", "name": "Propose Purchase Intent", "service": "commerce", "risk_level": "LOW",
+     "input_schema": {"task_id": {}, "product_id": {}, "quantity": {}}},
 ]

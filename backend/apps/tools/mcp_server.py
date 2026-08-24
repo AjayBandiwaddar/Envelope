@@ -142,3 +142,16 @@ async def delete_customer(task_id: str, customer_id: str) -> dict:
         resource_id=customer_id,
         parameters={"customer_id": customer_id},
     )
+
+@mcp_server.tool()
+async def propose_purchase_intent(task_id: str, product_id: str, quantity: int = 1) -> dict:
+    """Propose buying a product. No money moves and nothing is reserved - price is computed server-side."""
+    return await _dispatch(
+        tool_id="propose_purchase_intent",
+        action="propose_purchase_intent",
+        agent_token=_resolve_agent_token(),
+        task_id=task_id,
+        resource_type="",
+        resource_id=None,
+        parameters={"task_id": task_id, "product_id": product_id, "quantity": quantity},
+    )
