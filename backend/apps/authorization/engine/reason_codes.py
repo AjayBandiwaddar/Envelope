@@ -52,6 +52,7 @@ class ReasonCode(str, Enum):
 
     POLICY_EVALUATION_ERROR = "POLICY_EVALUATION_ERROR"
     RATE_LIMIT_EXCEEDED = "RATE_LIMIT_EXCEEDED"
+    UNKNOWN_PARAMETER = "UNKNOWN_PARAMETER"
 
     def __str__(self) -> str:  # pragma: no cover - trivial
         return self.value

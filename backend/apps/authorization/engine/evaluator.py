@@ -156,6 +156,13 @@ def _evaluate(
         return _deny(ReasonCode.TOOL_NOT_REGISTERED)
     if not tool.is_active:
         return _deny(ReasonCode.TOOL_DISABLED)
+    if tool.input_schema:
+        extra = set(action.parameters.keys()) - set(tool.input_schema.keys())
+        if extra:
+            return _deny(
+                ReasonCode.UNKNOWN_PARAMETER,
+                detail=f"Unknown parameter(s): {', '.join(sorted(extra))}.",
+            )
 
     # --- Gather policies scoped to this task ---
     task_policies = [p for p in policies if p.task_id == task.task_id]

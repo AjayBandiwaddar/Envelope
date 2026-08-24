@@ -45,7 +45,7 @@ def _task_snapshot(task: Task | None) -> eng.TaskSnapshot | None:
 def _tool_snapshot(tool: Tool | None) -> eng.ToolSnapshot | None:
     if tool is None:
         return None
-    return eng.ToolSnapshot(tool_id=tool.tool_id, status=tool.status)
+    return eng.ToolSnapshot(tool_id=tool.tool_id, status=tool.status, input_schema=tool.input_schema)
 
 
 def _constraint_snapshot(raw: dict) -> dict[str, eng.Constraint]:

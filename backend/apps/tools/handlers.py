@@ -98,10 +98,16 @@ TOOL_HANDLERS: dict[str, ToolHandler] = {
 # Default tool registrations (tool_id, name, service, risk_level).
 # Consumed by the seed_tools management command.
 DEFAULT_TOOLS = [
-    {"tool_id": "get_order", "name": "Get Order", "service": "orders", "risk_level": "LOW"},
-    {"tool_id": "refund_order", "name": "Refund Order", "service": "orders", "risk_level": "HIGH"},
-    {"tool_id": "cancel_order", "name": "Cancel Order", "service": "orders", "risk_level": "MEDIUM"},
-    {"tool_id": "get_customer", "name": "Get Customer", "service": "customers", "risk_level": "LOW"},
-    {"tool_id": "send_email", "name": "Send Email", "service": "notifications", "risk_level": "MEDIUM"},
-    {"tool_id": "delete_customer", "name": "Delete Customer", "service": "customers", "risk_level": "HIGH"},
+    {"tool_id": "get_order", "name": "Get Order", "service": "orders", "risk_level": "LOW",
+     "input_schema": {"order_id": {}}},
+    {"tool_id": "refund_order", "name": "Refund Order", "service": "orders", "risk_level": "HIGH",
+     "input_schema": {"order_id": {}, "amount": {}, "currency": {}}},
+    {"tool_id": "cancel_order", "name": "Cancel Order", "service": "orders", "risk_level": "MEDIUM",
+     "input_schema": {"order_id": {}}},
+    {"tool_id": "get_customer", "name": "Get Customer", "service": "customers", "risk_level": "LOW",
+     "input_schema": {"customer_id": {}}},
+    {"tool_id": "send_email", "name": "Send Email", "service": "notifications", "risk_level": "MEDIUM",
+     "input_schema": {"to": {}, "subject": {}}},
+    {"tool_id": "delete_customer", "name": "Delete Customer", "service": "customers", "risk_level": "HIGH",
+     "input_schema": {"customer_id": {}}},
 ]

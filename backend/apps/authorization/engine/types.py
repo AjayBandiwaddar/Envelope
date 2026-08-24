@@ -72,8 +72,9 @@ class TaskSnapshot:
 @dataclass(frozen=True)
 class ToolSnapshot:
     tool_id: str
-    status: str  # "ACTIVE" | "DISABLED"
-
+    status: str
+    input_schema: dict[str, object] = field(default_factory=dict)
+    
     @property
     def is_active(self) -> bool:
         return self.status == "ACTIVE"

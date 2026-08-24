@@ -23,6 +23,7 @@ class Command(BaseCommand):
                     "name": entry["name"],
                     "service": entry["service"],
                     "risk_level": entry["risk_level"],
+                    "input_schema": entry.get("input_schema", {}),
                 },
             )
             if created:

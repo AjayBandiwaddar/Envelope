@@ -30,7 +30,11 @@ def admin_client(api_client):
 
 @pytest.fixture
 def refund_tool(db):
-    return Tool.objects.create(tool_id="refund_order", name="Refund Order")
+    return Tool.objects.create(
+        tool_id="refund_order",
+        name="Refund Order",
+        input_schema={"order_id": {}, "amount": {}, "currency": {}},
+    )
 
 
 @pytest.fixture
