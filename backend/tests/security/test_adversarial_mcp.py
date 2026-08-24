@@ -62,16 +62,16 @@ class TestMCPProtocolIntegration:
 
     @pytest.mark.asyncio
     async def test_valid_call_via_real_mcp_protocol_allows_and_executes(
-        self, agent_with_token, active_task, refund_policy
+        self, agent_with_token, active_task, refund_policy, monkeypatch
     ):
         from asgiref.sync import sync_to_async
-
         _, raw_token = agent_with_token
+        monkeypatch.setenv("AGENT_TOKEN", raw_token)
         await sync_to_async(reset_rate_limit)(agent_with_token[0].agent_id)
         result = await self._call_real_mcp(
             "refund_order",
             {
-                "agent_token": raw_token, "task_id": active_task.task_id,
+                "task_id": active_task.task_id,
                 "order_id": "8291", "amount": 3000, "currency": "INR",
             },
         )
@@ -82,17 +82,17 @@ class TestMCPProtocolIntegration:
 
     @pytest.mark.asyncio
     async def test_excessive_amount_via_real_mcp_protocol_denies_and_does_not_execute(
-        self, agent_with_token, active_task, refund_policy
+        self, agent_with_token, active_task, refund_policy, monkeypatch
     ):
         from asgiref.sync import sync_to_async
-
         _, raw_token = agent_with_token
+        monkeypatch.setenv("AGENT_TOKEN", raw_token)
         await sync_to_async(reset_rate_limit)(agent_with_token[0].agent_id)
         before = await sync_to_async(ToolExecution.objects.count)()
         result = await self._call_real_mcp(
             "refund_order",
             {
-                "agent_token": raw_token, "task_id": active_task.task_id,
+                "task_id": active_task.task_id,
                 "order_id": "8291", "amount": 99999, "currency": "INR",
             },
         )

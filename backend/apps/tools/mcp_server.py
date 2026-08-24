@@ -12,21 +12,36 @@ in the codebase that imports the mcp package - the authorization
 service and policy engine have no idea MCP exists.
 
 Run via: python manage.py run_mcp_server
+
+Agent identity is bound once per process via the AGENT_TOKEN environment
+variable (see _resolve_agent_token below), not passed as a per-call tool
+argument. A stdio MCP server process is already dedicated to a single
+agent connection for its whole lifetime, so this keeps the credential
+out of the tool schema an LLM sees and fills in - it is not itself a
+business parameter and should never look like one.
 """
 
 from __future__ import annotations
-
+import os
 import anyio
 from mcp.server.mcpserver import MCPServer
-
 from apps.tools.mcp_dispatch import dispatch_tool_call
+
+
+def _resolve_agent_token() -> str:
+    token = os.environ.get("AGENT_TOKEN", "")
+    if not token:
+        raise RuntimeError("AGENT_TOKEN environment variable is not set for this MCP server process.")
+    return token
+
 
 mcp_server = MCPServer(
     name="agent-action-firewall",
     description=(
         "Task-scoped, policy-enforced tool access. Every tool call requires "
-        "a valid agent_token and task_id and is independently authorized "
-        "against stored policy before it runs."
+        "a valid agent identity (bound via AGENT_TOKEN at process start) and "
+        "task_id, and is independently authorized against stored policy "
+        "before it runs."
     ),
 )
 
@@ -46,12 +61,12 @@ async def _dispatch(**kwargs) -> dict:
 
 
 @mcp_server.tool()
-async def get_order(agent_token: str, task_id: str, order_id: str) -> dict:
+async def get_order(task_id: str, order_id: str) -> dict:
     """Look up an order. Requires authorization for action=get_order, resource=order."""
     return await _dispatch(
         tool_id="get_order",
         action="get_order",
-        agent_token=agent_token,
+        agent_token=_resolve_agent_token(),
         task_id=task_id,
         resource_type="order",
         resource_id=order_id,
@@ -60,12 +75,12 @@ async def get_order(agent_token: str, task_id: str, order_id: str) -> dict:
 
 
 @mcp_server.tool()
-async def refund_order(agent_token: str, task_id: str, order_id: str, amount: float, currency: str) -> dict:
+async def refund_order(task_id: str, order_id: str, amount: float, currency: str) -> dict:
     """Refund an order. Requires authorization for action=refund_order, resource=order."""
     return await _dispatch(
         tool_id="refund_order",
         action="refund_order",
-        agent_token=agent_token,
+        agent_token=_resolve_agent_token(),
         task_id=task_id,
         resource_type="order",
         resource_id=order_id,
@@ -74,12 +89,12 @@ async def refund_order(agent_token: str, task_id: str, order_id: str, amount: fl
 
 
 @mcp_server.tool()
-async def cancel_order(agent_token: str, task_id: str, order_id: str) -> dict:
+async def cancel_order(task_id: str, order_id: str) -> dict:
     """Cancel an order. Requires authorization for action=cancel_order, resource=order."""
     return await _dispatch(
         tool_id="cancel_order",
         action="cancel_order",
-        agent_token=agent_token,
+        agent_token=_resolve_agent_token(),
         task_id=task_id,
         resource_type="order",
         resource_id=order_id,
@@ -88,12 +103,12 @@ async def cancel_order(agent_token: str, task_id: str, order_id: str) -> dict:
 
 
 @mcp_server.tool()
-async def get_customer(agent_token: str, task_id: str, customer_id: str) -> dict:
+async def get_customer(task_id: str, customer_id: str) -> dict:
     """Look up a customer. Requires authorization for action=get_customer, resource=customer."""
     return await _dispatch(
         tool_id="get_customer",
         action="get_customer",
-        agent_token=agent_token,
+        agent_token=_resolve_agent_token(),
         task_id=task_id,
         resource_type="customer",
         resource_id=customer_id,
@@ -102,12 +117,12 @@ async def get_customer(agent_token: str, task_id: str, customer_id: str) -> dict
 
 
 @mcp_server.tool()
-async def send_email(agent_token: str, task_id: str, to: str, subject: str) -> dict:
+async def send_email(task_id: str, to: str, subject: str) -> dict:
     """Send an email. Requires authorization for action=send_email."""
     return await _dispatch(
         tool_id="send_email",
         action="send_email",
-        agent_token=agent_token,
+        agent_token=_resolve_agent_token(),
         task_id=task_id,
         resource_type="",
         resource_id=None,
@@ -116,12 +131,12 @@ async def send_email(agent_token: str, task_id: str, to: str, subject: str) -> d
 
 
 @mcp_server.tool()
-async def delete_customer(agent_token: str, task_id: str, customer_id: str) -> dict:
+async def delete_customer(task_id: str, customer_id: str) -> dict:
     """Delete a customer. Requires authorization for action=delete_customer, resource=customer. High risk."""
     return await _dispatch(
         tool_id="delete_customer",
         action="delete_customer",
-        agent_token=agent_token,
+        agent_token=_resolve_agent_token(),
         task_id=task_id,
         resource_type="customer",
         resource_id=customer_id,
