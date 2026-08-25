@@ -1,6 +1,8 @@
-from django.http import HttpResponse, Http404
+import json
+from django.http import HttpResponse, Http404, JsonResponse
 from django.shortcuts import render, get_object_or_404, redirect
 from django.conf import settings
+from django.views.decorators.csrf import csrf_exempt
 from apps.commerce.models import Order, Product
 from apps.tools.mcp_dispatch import dispatch_tool_call
 from apps.commerce.authorization import confirm_purchase_intent
@@ -15,6 +17,30 @@ def product_detail_view(request, product_id):
     product = get_object_or_404(Product, product_id=product_id, active=True)
     related_products = Product.objects.filter(active=True).exclude(product_id=product_id)[:3]
     return render(request, "commerce/product_detail.html", {"product": product, "related_products": related_products})
+
+
+@csrf_exempt
+def payment_callback_view(request, order_id):
+    if request.method != "POST":
+        return HttpResponse("Method not allowed", status=405)
+    data = json.loads(request.body)
+    order = get_object_or_404(Order, order_id=order_id)
+    order.razorpay_payment_id = data.get("razorpay_payment_id", "")
+    order.pending_signature = data.get("razorpay_signature", "")
+    order.save(update_fields=["razorpay_payment_id", "pending_signature", "updated_at"])
+    return JsonResponse({"status": "received"})
+
+
+def payment_status_view(request, order_id):
+    order = get_object_or_404(Order, order_id=order_id)
+    if order.razorpay_payment_id and order.pending_signature:
+        return JsonResponse({
+            "status": "ready",
+            "razorpay_order_id": order.razorpay_order_id,
+            "razorpay_payment_id": order.razorpay_payment_id,
+            "razorpay_signature": order.pending_signature,
+        })
+    return JsonResponse({"status": "waiting"})
 
 
 def checkout_view(request, order_id):
@@ -41,12 +67,14 @@ def checkout_view(request, order_id):
         name: "Reference Merchant (Buildathon POC)",
         description: "{order.purchase_intent.product.name}",
         handler: function (response) {{
-          document.getElementById('result').textContent =
-            "intent_id: {order.purchase_intent.intent_id}\\n" +
-            "razorpay_order_id: " + response.razorpay_order_id + "\\n" +
-            "razorpay_payment_id: " + response.razorpay_payment_id + "\\n" +
-            "razorpay_signature: " + response.razorpay_signature +
-            "\\n\\nCopy these into finalize_payment.";
+          fetch("/checkout/{order.order_id}/callback/", {{
+            method: "POST",
+            headers: {{"Content-Type": "application/json"}},
+            body: JSON.stringify(response),
+          }}).then(function () {{
+            document.getElementById('result').textContent =
+              "Payment received - you can close this tab, the agent will pick it up automatically.";
+          }});
         }}
       }};
       new Razorpay(options).open();

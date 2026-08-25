@@ -81,6 +81,7 @@ class Order(models.Model):
     currency = models.CharField(max_length=3)
     razorpay_order_id = models.CharField(max_length=100, blank=True, default="")
     razorpay_payment_id = models.CharField(max_length=100, blank=True, default="")
+    pending_signature = models.CharField(max_length=200, blank=True, default="")
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
 
