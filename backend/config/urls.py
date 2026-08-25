@@ -17,7 +17,7 @@ from config.health import health_view, ready_view
 
 urlpatterns = [
     path("admin/", admin.site.urls),
-    path("checkout/", include("apps.commerce.urls")),
+    path("", include("apps.commerce.urls")),
     path("api/health/", health_view, name="health"),
     path("api/ready/", ready_view, name="ready"),
     path("api/agents/", include("apps.agents.urls")),

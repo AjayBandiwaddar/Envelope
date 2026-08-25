@@ -1,0 +1,180 @@
+{% load static %}
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, shrink-to-fit=no">
+  <meta http-equiv="x-ua-compatible" content="ie=edge">
+  <title>Reference Merchant - Laptops</title>
+  <link rel="stylesheet" href="https://use.fontawesome.com/releases/v5.11.2/css/all.css">
+  <link href="{% static 'commerce/css/bootstrap.min.css' %}" rel="stylesheet">
+  <link href="{% static 'commerce/css/mdb.min.css' %}" rel="stylesheet">
+  <link href="{% static 'commerce/css/style.min.css' %}" rel="stylesheet">
+
+  <!--
+    Structured data so an AI agent (or any commerce-literate crawler) can
+    read this catalog using a recognized vocabulary, not a bespoke one.
+    This is what makes the catalog genuinely agent-readable, as opposed
+    to just an API that happens to only be documented for our own agent.
+  -->
+  <script type="application/ld+json">
+  {
+    "@context": "https://schema.org",
+    "@type": "ItemList",
+    "itemListElement": [
+      {% for product in products %}
+      {
+        "@type": "ListItem",
+        "position": {{ forloop.counter }},
+        "url": "{{ request.scheme }}://{{ request.get_host }}{% url 'product-detail' product.product_id %}",
+        "item": {
+          "@type": "Product",
+          "sku": "{{ product.product_id }}",
+          "name": "{{ product.name|escapejs }}",
+          "category": "{{ product.category|escapejs }}",
+          "offers": {
+            "@type": "Offer",
+            "priceCurrency": "{{ product.currency }}",
+            "price": "{{ product.price_minor|floatformat:0 }}",
+            "availability": "{% if product.active %}https://schema.org/InStock{% else %}https://schema.org/OutOfStock{% endif %}"
+          }
+        }
+      }{% if not forloop.last %},{% endif %}
+      {% endfor %}
+    ]
+  }
+  </script>
+</head>
+
+<body>
+
+  <!-- Navbar -->
+  <nav class="navbar fixed-top navbar-expand-lg navbar-light white scrolling-navbar">
+    <div class="container">
+      <a class="navbar-brand waves-effect" href="{% url 'catalog' %}">
+        <strong class="blue-text">Reference Merchant</strong>
+      </a>
+      <button class="navbar-toggler" type="button" data-toggle="collapse" data-target="#navbarSupportedContent"
+        aria-controls="navbarSupportedContent" aria-expanded="false" aria-label="Toggle navigation">
+        <span class="navbar-toggler-icon"></span>
+      </button>
+      <div class="collapse navbar-collapse" id="navbarSupportedContent">
+        <ul class="navbar-nav mr-auto">
+          <li class="nav-item active">
+            <a class="nav-link waves-effect" href="{% url 'catalog' %}">Laptops
+              <span class="sr-only">(current)</span>
+            </a>
+          </li>
+        </ul>
+        <ul class="navbar-nav nav-flex-icons">
+          <li class="nav-item">
+            <span class="nav-link">
+              <span class="badge blue z-depth-1 mr-1">Test Mode</span>
+              AI Buyer Reference Merchant
+            </span>
+          </li>
+        </ul>
+      </div>
+    </div>
+  </nav>
+  <!-- Navbar -->
+
+  <!-- Hero -->
+  <header style="height: 40vh; margin-top: 56px;">
+    <div class="view" style="height: 100%; background-image: url('https://mdbootstrap.com/img/Photos/Horizontal/E-commerce/8-col/img%282%29.jpg'); background-repeat: no-repeat; background-size: cover;">
+      <div class="mask rgba-black-strong d-flex justify-content-center align-items-center" style="height: 100%;">
+        <div class="text-center white-text mx-5 wow fadeIn">
+          <h1 class="mb-3"><strong>Reference Merchant</strong></h1>
+          <p class="mb-0 d-none d-md-block">
+            <strong>A small, real catalog - built to be transactable by an AI buyer, end to end.</strong>
+          </p>
+        </div>
+      </div>
+    </div>
+  </header>
+  <!-- Hero -->
+
+  <!--Main layout-->
+  <main class="mt-5 pt-4">
+    <div class="container">
+
+      <!--Section: Products-->
+      <section class="text-center mb-4">
+
+        <h2 class="h1-responsive font-weight-bold my-4">Laptops</h2>
+        <p class="grey-text w-responsive mx-auto mb-5">
+          Every product below carries structured Offer data - price, currency, and availability -
+          computed server-side, never trusted from user or agent input.
+        </p>
+
+        <!--Grid row-->
+        <div class="row">
+
+          {% for product in products %}
+          <!--Grid column-->
+          <div class="col-lg-4 col-md-6 mb-4">
+            <!--Card-->
+            <div class="card">
+              <!--Card image-->
+              <div class="view overlay">
+                <img src="https://placehold.co/500x350/e3ecf7/1c3d5a?text={{ product.name|urlencode }}"
+                  class="card-img-top" alt="{{ product.name }}">
+                <a href="{% url 'product-detail' product.product_id %}">
+                  <div class="mask rgba-white-slight"></div>
+                </a>
+              </div>
+              <!--Card image-->
+
+              <!--Card content-->
+              <div class="card-body text-center">
+                <a href="{% url 'product-detail' product.product_id %}" class="grey-text">
+                  <h5>{{ product.category|title }}</h5>
+                </a>
+                <h5>
+                  <strong>
+                    <a href="{% url 'product-detail' product.product_id %}" class="dark-grey-text">{{ product.name }}</a>
+                  </strong>
+                </h5>
+                <h4 class="font-weight-bold blue-text">
+                  <strong>&#8377;{% widthratio product.price_minor 100 1 %}</strong>
+                </h4>
+              </div>
+              <!--Card content-->
+            </div>
+            <!--Card-->
+          </div>
+          <!--Grid column-->
+          {% empty %}
+          <p class="grey-text">No products available right now.</p>
+          {% endfor %}
+
+        </div>
+        <!--Grid row-->
+
+      </section>
+      <!--Section: Products-->
+
+    </div>
+  </main>
+  <!--Main layout-->
+
+  <!--Footer-->
+  <footer class="page-footer text-center font-small mt-4">
+    <div class="footer-copyright py-3">
+      Reference Merchant - built for the Razorpay AI Buildathon 2026, Track 1 (AI Growth &amp; Agentic Commerce).
+      Storefront template adapted from
+      <a href="https://github.com/mdbootstrap/Ecommerce-Template-Bootstrap" target="_blank">MDBootstrap's free Ecommerce Template</a>
+      (MIT licensed).
+    </div>
+  </footer>
+  <!--/.Footer-->
+
+  <!-- SCRIPTS -->
+  <script type="text/javascript" src="{% static 'commerce/js/jquery-3.4.1.min.js' %}"></script>
+  <script type="text/javascript" src="{% static 'commerce/js/popper.min.js' %}"></script>
+  <script type="text/javascript" src="{% static 'commerce/js/bootstrap.min.js' %}"></script>
+  <script type="text/javascript" src="{% static 'commerce/js/mdb.min.js' %}"></script>
+</body>
+
+</html>

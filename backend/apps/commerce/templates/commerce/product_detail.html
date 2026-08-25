@@ -1,0 +1,150 @@
+{% load static %}
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, shrink-to-fit=no">
+  <meta http-equiv="x-ua-compatible" content="ie=edge">
+  <title>{{ product.name }} - Reference Merchant</title>
+  <link rel="stylesheet" href="https://use.fontawesome.com/releases/v5.11.2/css/all.css">
+  <link href="{% static 'commerce/css/bootstrap.min.css' %}" rel="stylesheet">
+  <link href="{% static 'commerce/css/mdb.min.css' %}" rel="stylesheet">
+  <link href="{% static 'commerce/css/style.min.css' %}" rel="stylesheet">
+
+  <!--
+    Full Product/Offer structured data. This page is the canonical
+    resolvable URL for one SKU, so this is where an agent's product
+    lookup should actually land - the catalog page's ItemList links
+    here, not the other way around.
+  -->
+  <script type="application/ld+json">
+  {
+    "@context": "https://schema.org",
+    "@type": "Product",
+    "sku": "{{ product.product_id }}",
+    "name": "{{ product.name|escapejs }}",
+    "category": "{{ product.category|escapejs }}",
+    "description": "{{ product.description|escapejs }}",
+    "offers": {
+      "@type": "Offer",
+      "url": "{{ request.scheme }}://{{ request.get_host }}{% url 'product-detail' product.product_id %}",
+      "priceCurrency": "{{ product.currency }}",
+      "price": "{{ product.price_minor|floatformat:0 }}",
+      "availability": "{% if product.active %}https://schema.org/InStock{% else %}https://schema.org/OutOfStock{% endif %}"
+    }
+  }
+  </script>
+</head>
+
+<body>
+
+  <!-- Navbar -->
+  <nav class="navbar fixed-top navbar-expand-lg navbar-light white scrolling-navbar">
+    <div class="container">
+      <a class="navbar-brand waves-effect" href="{% url 'catalog' %}">
+        <strong class="blue-text">Reference Merchant</strong>
+      </a>
+      <button class="navbar-toggler" type="button" data-toggle="collapse" data-target="#navbarSupportedContent"
+        aria-controls="navbarSupportedContent" aria-expanded="false" aria-label="Toggle navigation">
+        <span class="navbar-toggler-icon"></span>
+      </button>
+      <div class="collapse navbar-collapse" id="navbarSupportedContent">
+        <ul class="navbar-nav mr-auto">
+          <li class="nav-item">
+            <a class="nav-link waves-effect" href="{% url 'catalog' %}">Laptops</a>
+          </li>
+        </ul>
+      </div>
+    </div>
+  </nav>
+  <!-- Navbar -->
+
+  <!--Main layout-->
+  <main class="mt-5 pt-4">
+    <div class="container dark-grey-text mt-5">
+
+      <!--Grid row-->
+      <div class="row">
+
+        <!--Grid column-->
+        <div class="col-md-6 mb-4">
+          <img src="https://placehold.co/700x500/e3ecf7/1c3d5a?text={{ product.name|urlencode }}" class="img-fluid" alt="{{ product.name }}">
+        </div>
+        <!--Grid column-->
+
+        <!--Grid column-->
+        <div class="col-md-6 mb-4">
+          <div class="p-4">
+
+            <div class="mb-3">
+              <span class="badge purple mr-1">{{ product.category|title }}</span>
+              <span class="badge {% if product.active %}green{% else %}grey{% endif %} mr-1">
+                {% if product.active %}In Stock{% else %}Unavailable{% endif %}
+              </span>
+            </div>
+
+            <p class="lead">
+              <strong>&#8377;{% widthratio product.price_minor 100 1 %} {{ product.currency }}</strong>
+            </p>
+
+            <p class="lead font-weight-bold">Description</p>
+            <p>{{ product.description }}</p>
+
+            <form method="post" action="{% url 'start-purchase' product.product_id %}">
+              {% csrf_token %}
+              <button type="submit" class="btn btn-primary btn-lg">
+                <i class="fas fa-robot mr-2"></i> Buy with AI Agent
+              </button>
+            </form>
+            <p class="grey-text small mt-2">
+              Runs the same propose &rarr; confirm &rarr; create_order flow an autonomous
+              buyer agent would call - gated by the authorization firewall at every step.
+              <code>sku: {{ product.product_id }}</code>
+            </p>
+
+          </div>
+        </div>
+        <!--Grid column-->
+
+      </div>
+      <!--Grid row-->
+
+      {% if related_products %}
+      <hr>
+      <h4 class="my-4 h4 text-center">Other laptops</h4>
+      <div class="row">
+        {% for other in related_products %}
+        <div class="col-lg-4 col-md-6 mb-4 text-center">
+          <a href="{% url 'product-detail' other.product_id %}" class="dark-grey-text">
+            <h5>{{ other.name }}</h5>
+            <p>&#8377;{% widthratio other.price_minor 100 1 %}</p>
+          </a>
+        </div>
+        {% endfor %}
+      </div>
+      {% endif %}
+
+    </div>
+  </main>
+  <!--Main layout-->
+
+  <!--Footer-->
+  <footer class="page-footer text-center font-small mt-4">
+    <div class="footer-copyright py-3">
+      Reference Merchant - built for the Razorpay AI Buildathon 2026, Track 1 (AI Growth &amp; Agentic Commerce).
+      Storefront template adapted from
+      <a href="https://github.com/mdbootstrap/Ecommerce-Template-Bootstrap" target="_blank">MDBootstrap's free Ecommerce Template</a>
+      (MIT licensed).
+    </div>
+  </footer>
+  <!--/.Footer-->
+
+  <!-- SCRIPTS -->
+  <script type="text/javascript" src="{% static 'commerce/js/jquery-3.4.1.min.js' %}"></script>
+  <script type="text/javascript" src="{% static 'commerce/js/popper.min.js' %}"></script>
+  <script type="text/javascript" src="{% static 'commerce/js/bootstrap.min.js' %}"></script>
+  <script type="text/javascript" src="{% static 'commerce/js/mdb.min.js' %}"></script>
+</body>
+
+</html>
