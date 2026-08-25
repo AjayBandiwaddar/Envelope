@@ -186,3 +186,11 @@ async def finalize_payment(task_id: str, intent_id: str, razorpay_order_id: str,
             "razorpay_signature": razorpay_signature,
         },
     )
+
+@mcp_server.tool()
+async def list_products(task_id: str) -> dict:
+    """List the merchant's active catalog. No filtering server-side - the catalog is small, reason over it directly."""
+    return await _dispatch(
+        tool_id="list_products", action="list_products", agent_token=_resolve_agent_token(),
+        task_id=task_id, resource_type="", resource_id=None, parameters={"task_id": task_id},
+    )

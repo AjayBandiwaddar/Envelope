@@ -236,6 +236,25 @@ def finalize_payment(arguments: dict) -> dict:
     }
 
 
+def list_products(arguments: dict) -> dict:
+    from apps.commerce.models import Product
+    products = Product.objects.filter(active=True)
+    return {
+        "status": "ok",
+        "products": [
+            {
+                "product_id": p.product_id,
+                "name": p.name,
+                "category": p.category,
+                "description": p.description,
+                "price_minor": p.price_minor,
+                "currency": p.currency,
+            }
+            for p in products
+        ],
+    }
+
+
 TOOL_HANDLERS: dict[str, ToolHandler] = {
     "get_order": get_order,
     "refund_order": refund_order,
@@ -246,6 +265,7 @@ TOOL_HANDLERS: dict[str, ToolHandler] = {
     "propose_purchase_intent": propose_purchase_intent,
     "create_order": create_order,
     "finalize_payment": finalize_payment,
+    "list_products": list_products,
 }
 
 
@@ -270,4 +290,6 @@ DEFAULT_TOOLS = [
      "input_schema": {"intent_id": {}, "amount": {}, "currency": {}}},
     {"tool_id": "finalize_payment", "name": "Finalize Payment", "service": "commerce", "risk_level": "HIGH",
      "input_schema": {"intent_id": {}, "razorpay_order_id": {}, "razorpay_payment_id": {}, "razorpay_signature": {}}},
+    {"tool_id": "list_products", "name": "List Products", "service": "commerce", "risk_level": "LOW",
+     "input_schema": {"task_id": {}}},
 ]

@@ -40,6 +40,19 @@ class Command(BaseCommand):
             },
         )
 
+        Policy.objects.get_or_create(
+            policy_id=f"policy-{task.task_id}-list-products",
+            defaults={
+                "name": "Standing: list products (demo agent)",
+                "effect": PolicyEffect.ALLOW,
+                "agent_scope": agent,
+                "task_scope": task,
+                "tool_scope": Tool.objects.get(tool_id="list_products"),
+                "allowed_actions": ["list_products"],
+                "resource_mode": ResourceScopeMode.NONE,
+            },
+        )
+
         self.stdout.write(self.style.SUCCESS("Demo agent/task ready."))
         self.stdout.write(self.style.WARNING(f"DEMO_AGENT_TOKEN={raw_token}"))
         self.stdout.write("Copy that line into your .env file (repo root), replacing any previous value.")
