@@ -168,3 +168,21 @@ async def create_order(task_id: str, intent_id: str, amount: int, currency: str)
         resource_id=intent_id,
         parameters={"intent_id": intent_id, "amount": amount, "currency": currency},
     )
+
+@mcp_server.tool()
+async def finalize_payment(task_id: str, intent_id: str, razorpay_order_id: str, razorpay_payment_id: str, razorpay_signature: str) -> dict:
+    """Verify a completed Checkout payment and mark the order paid."""
+    return await _dispatch(
+        tool_id="finalize_payment",
+        action="finalize_payment",
+        agent_token=_resolve_agent_token(),
+        task_id=task_id,
+        resource_type="purchase_intent",
+        resource_id=intent_id,
+        parameters={
+            "intent_id": intent_id,
+            "razorpay_order_id": razorpay_order_id,
+            "razorpay_payment_id": razorpay_payment_id,
+            "razorpay_signature": razorpay_signature,
+        },
+    )

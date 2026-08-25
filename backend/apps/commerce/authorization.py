@@ -7,7 +7,7 @@ from apps.tools.models import Tool
 # finalize_payment isn't built yet (see the Checkout-based redesign) - only
 # create_order exists as a real Tool right now. Add "finalize_payment" here
 # once that tool is seeded.
-GATED_PURCHASE_TOOLS = ("create_order",)
+GATED_PURCHASE_TOOLS = ("create_order", "finalize_payment")
 
 
 def confirm_purchase_intent(intent_id: str) -> list[Policy]:
@@ -28,9 +28,15 @@ def confirm_purchase_intent(intent_id: str) -> list[Policy]:
     if intent.status != PurchaseIntentStatus.PENDING:
         raise ValueError(f"Cannot confirm a purchase intent in status {intent.status}.")
 
-    constraints = {
-        "amount": {"operator": "LTE", "value": intent.canonical_amount_minor},
-        "currency": {"operator": "EQ", "value": intent.currency},
+    tool_constraints: dict[str, dict] = {
+        "create_order": {
+            "amount": {"operator": "LTE", "value": intent.canonical_amount_minor},
+            "currency": {"operator": "EQ", "value": intent.currency},
+        },
+        # No amount/currency constraint here - the amount was already
+        # locked in at create_order. This step only verifies a payment
+        # signature for this exact, already-scoped purchase intent.
+        "finalize_payment": {},
     }
     with transaction.atomic():
         policies = []
@@ -48,7 +54,7 @@ def confirm_purchase_intent(intent_id: str) -> list[Policy]:
                     resource_type="purchase_intent",
                     resource_mode=ResourceScopeMode.EXACT,
                     resource_ids=[intent.intent_id],
-                    constraints=constraints,
+                    constraints=tool_constraints[tool_id],
                 )
             )
         intent.status = PurchaseIntentStatus.AUTHORIZED

@@ -183,6 +183,59 @@ def create_order(arguments: dict) -> dict:
     }
 
 
+def finalize_payment(arguments: dict) -> dict:
+    """
+    Verifies a completed Razorpay Checkout payment's signature and marks
+    the Order PAID. Everything before this point (propose/confirm/
+    create_order) only ever authorized that a payment COULD happen -
+    this is the actual "money captured" confirmation, and it's a hard
+    cryptographic check, not a status flag we trust on the agent's word.
+    """
+    from apps.commerce.models import Order, OrderStatus, PurchaseIntent, PurchaseIntentStatus
+    from apps.commerce.razorpay_client import get_client
+    import razorpay.errors
+
+    intent_id = arguments.get("intent_id")
+    razorpay_order_id = arguments.get("razorpay_order_id")
+    razorpay_payment_id = arguments.get("razorpay_payment_id")
+    razorpay_signature = arguments.get("razorpay_signature")
+
+    try:
+        intent = PurchaseIntent.objects.get(intent_id=intent_id)
+    except PurchaseIntent.DoesNotExist:
+        return {"status": "error", "reason": "PURCHASE_INTENT_NOT_FOUND"}
+    try:
+        order = intent.order
+    except Order.DoesNotExist:
+        return {"status": "error", "reason": "ORDER_NOT_FOUND"}
+    if order.razorpay_order_id != razorpay_order_id:
+        return {"status": "error", "reason": "ORDER_ID_MISMATCH"}
+
+    client = get_client()
+    try:
+        client.utility.verify_payment_signature({
+            "razorpay_order_id": razorpay_order_id,
+            "razorpay_payment_id": razorpay_payment_id,
+            "razorpay_signature": razorpay_signature,
+        })
+    except razorpay.errors.SignatureVerificationError:
+        order.status = OrderStatus.FAILED
+        order.save(update_fields=["status", "updated_at"])
+        return {"status": "error", "reason": "SIGNATURE_VERIFICATION_FAILED", "order_id": order.order_id}
+
+    order.status = OrderStatus.PAID
+    order.razorpay_payment_id = razorpay_payment_id
+    order.save(update_fields=["status", "razorpay_payment_id", "updated_at"])
+    intent.status = PurchaseIntentStatus.COMPLETED
+    intent.save(update_fields=["status", "updated_at"])
+    return {
+        "status": "ok",
+        "order_id": order.order_id,
+        "razorpay_payment_id": razorpay_payment_id,
+        "order_status": order.status,
+    }
+
+
 TOOL_HANDLERS: dict[str, ToolHandler] = {
     "get_order": get_order,
     "refund_order": refund_order,
@@ -192,6 +245,7 @@ TOOL_HANDLERS: dict[str, ToolHandler] = {
     "delete_customer": delete_customer,
     "propose_purchase_intent": propose_purchase_intent,
     "create_order": create_order,
+    "finalize_payment": finalize_payment,
 }
 
 
@@ -214,4 +268,6 @@ DEFAULT_TOOLS = [
      "input_schema": {"task_id": {}, "product_id": {}, "quantity": {}}},
     {"tool_id": "create_order", "name": "Create Order", "service": "commerce", "risk_level": "MEDIUM",
      "input_schema": {"intent_id": {}, "amount": {}, "currency": {}}},
+    {"tool_id": "finalize_payment", "name": "Finalize Payment", "service": "commerce", "risk_level": "HIGH",
+     "input_schema": {"intent_id": {}, "razorpay_order_id": {}, "razorpay_payment_id": {}, "razorpay_signature": {}}},
 ]
