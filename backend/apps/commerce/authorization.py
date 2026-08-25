@@ -1,7 +1,13 @@
 from __future__ import annotations
+from django.db import transaction
 from apps.commerce.models import PurchaseIntent, PurchaseIntentStatus
 from apps.policies.models import Policy, PolicyEffect, ResourceScopeMode
 from apps.tools.models import Tool
+
+# finalize_payment isn't built yet (see the Checkout-based redesign) - only
+# create_order exists as a real Tool right now. Add "finalize_payment" here
+# once that tool is seeded.
+GATED_PURCHASE_TOOLS = ("create_order",)
 
 
 def confirm_purchase_intent(intent_id: str) -> list[Policy]:
@@ -26,24 +32,25 @@ def confirm_purchase_intent(intent_id: str) -> list[Policy]:
         "amount": {"operator": "LTE", "value": intent.canonical_amount_minor},
         "currency": {"operator": "EQ", "value": intent.currency},
     }
-    policies = []
-    for tool_id in ("create_order", "initiate_payment"):
-        tool = Tool.objects.get(tool_id=tool_id)
-        policies.append(
-            Policy.objects.create(
-                policy_id=f"policy-{intent.intent_id}-{tool_id}",
-                name=f"Confirmed purchase: {intent.intent_id} ({tool_id})",
-                effect=PolicyEffect.ALLOW,
-                agent_scope=intent.task.agent,
-                task_scope=intent.task,
-                tool_scope=tool,
-                allowed_actions=[tool_id],
-                resource_type="purchase_intent",
-                resource_mode=ResourceScopeMode.EXACT,
-                resource_ids=[intent.intent_id],
-                constraints=constraints,
+    with transaction.atomic():
+        policies = []
+        for tool_id in GATED_PURCHASE_TOOLS:
+            tool = Tool.objects.get(tool_id=tool_id)
+            policies.append(
+                Policy.objects.create(
+                    policy_id=f"policy-{intent.intent_id}-{tool_id}",
+                    name=f"Confirmed purchase: {intent.intent_id} ({tool_id})",
+                    effect=PolicyEffect.ALLOW,
+                    agent_scope=intent.task.agent,
+                    task_scope=intent.task,
+                    tool_scope=tool,
+                    allowed_actions=[tool_id],
+                    resource_type="purchase_intent",
+                    resource_mode=ResourceScopeMode.EXACT,
+                    resource_ids=[intent.intent_id],
+                    constraints=constraints,
+                )
             )
-        )
-    intent.status = PurchaseIntentStatus.AUTHORIZED
-    intent.save(update_fields=["status", "updated_at"])
+        intent.status = PurchaseIntentStatus.AUTHORIZED
+        intent.save(update_fields=["status", "updated_at"])
     return policies

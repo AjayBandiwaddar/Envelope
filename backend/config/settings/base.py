@@ -141,6 +141,8 @@ REST_FRAMEWORK = {
 # 3.1). Generate a real random value for anything beyond local dev - see
 # .env.example.
 ADMIN_API_TOKEN = env("ADMIN_API_TOKEN", default="dev-admin-token-change-me")
+RAZORPAY_KEY_ID = env("RAZORPAY_KEY_ID", default="")
+RAZORPAY_KEY_SECRET = env("RAZORPAY_KEY_SECRET", default="")
 
 # Default task lifetime when a caller doesn't specify expires_at
 # (API_SPEC.md Section 8.1's create-task example doesn't show an

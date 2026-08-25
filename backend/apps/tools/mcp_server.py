@@ -155,3 +155,16 @@ async def propose_purchase_intent(task_id: str, product_id: str, quantity: int =
         resource_id=None,
         parameters={"task_id": task_id, "product_id": product_id, "quantity": quantity},
     )
+
+@mcp_server.tool()
+async def create_order(task_id: str, intent_id: str, amount: int, currency: str) -> dict:
+    """Create the order for a confirmed purchase intent. Only succeeds if the intent was confirmed by the user and this amount is within the authorized ceiling."""
+    return await _dispatch(
+        tool_id="create_order",
+        action="create_order",
+        agent_token=_resolve_agent_token(),
+        task_id=task_id,
+        resource_type="purchase_intent",
+        resource_id=intent_id,
+        parameters={"intent_id": intent_id, "amount": amount, "currency": currency},
+    )

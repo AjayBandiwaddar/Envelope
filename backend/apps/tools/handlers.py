@@ -130,6 +130,59 @@ def propose_purchase_intent(arguments: dict) -> dict:
         "currency": product.currency,
         "intent_status": intent.status,
     }
+def create_order(arguments: dict) -> dict:
+    """
+    Creates the real Razorpay test-mode Order for a confirmed purchase
+    intent. The amount/currency actually sent to Razorpay always comes
+    from PurchaseIntent.canonical_amount_minor - never from arguments.
+    The values in arguments exist only so the authorization engine's
+    constraints have something to check before this handler ever runs;
+    they are not trusted as the source of truth for what gets charged.
+    """
+    import uuid
+    from django.conf import settings
+    from apps.commerce.models import Order, OrderStatus, PurchaseIntent, PurchaseIntentStatus
+    from apps.commerce.razorpay_client import get_client
+
+    intent_id = arguments.get("intent_id")
+    try:
+        intent = PurchaseIntent.objects.get(intent_id=intent_id)
+    except PurchaseIntent.DoesNotExist:
+        return {"status": "error", "reason": "PURCHASE_INTENT_NOT_FOUND"}
+
+    if intent.status != PurchaseIntentStatus.AUTHORIZED:
+        return {"status": "error", "reason": "PURCHASE_INTENT_NOT_CONFIRMED"}
+
+    if hasattr(intent, "order"):
+        return {"status": "error", "reason": "ORDER_ALREADY_EXISTS", "order_id": intent.order.order_id}
+
+    client = get_client()
+    rzp_order = client.order.create({
+        "amount": intent.canonical_amount_minor,
+        "currency": intent.currency,
+        "receipt": intent.intent_id,
+        "payment_capture": 1,
+    })
+
+    order = Order.objects.create(
+        order_id=f"order-{uuid.uuid4().hex[:12]}",
+        purchase_intent=intent,
+        status=OrderStatus.CREATED,
+        amount_minor=intent.canonical_amount_minor,
+        currency=intent.currency,
+        razorpay_order_id=rzp_order["id"],
+    )
+    return {
+        "status": "ok",
+        "order_id": order.order_id,
+        "razorpay_order_id": rzp_order["id"],
+        "amount_minor": order.amount_minor,
+        "currency": order.currency,
+        "order_status": order.status,
+        "razorpay_key_id": settings.RAZORPAY_KEY_ID,  # public id, safe to expose - needed client-side to open Checkout
+    }
+
+
 TOOL_HANDLERS: dict[str, ToolHandler] = {
     "get_order": get_order,
     "refund_order": refund_order,
@@ -138,6 +191,7 @@ TOOL_HANDLERS: dict[str, ToolHandler] = {
     "send_email": send_email,
     "delete_customer": delete_customer,
     "propose_purchase_intent": propose_purchase_intent,
+    "create_order": create_order,
 }
 
 
@@ -158,4 +212,6 @@ DEFAULT_TOOLS = [
      "input_schema": {"customer_id": {}}},
     {"tool_id": "propose_purchase_intent", "name": "Propose Purchase Intent", "service": "commerce", "risk_level": "LOW",
      "input_schema": {"task_id": {}, "product_id": {}, "quantity": {}}},
+    {"tool_id": "create_order", "name": "Create Order", "service": "commerce", "risk_level": "MEDIUM",
+     "input_schema": {"intent_id": {}, "amount": {}, "currency": {}}},
 ]

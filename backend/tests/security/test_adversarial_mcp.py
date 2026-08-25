@@ -113,7 +113,7 @@ class TestMCPProtocolIntegration:
         expected = {
             "get_order", "refund_order", "cancel_order",
             "get_customer", "send_email", "delete_customer",
-            "propose_purchase_intent",
+            "propose_purchase_intent","create_order",
         }
         assert tool_names == expected
 
