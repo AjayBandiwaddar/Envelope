@@ -156,6 +156,16 @@ def create_order(arguments: dict) -> dict:
     if hasattr(intent, "order"):
         return {"status": "error", "reason": "ORDER_ALREADY_EXISTS", "order_id": intent.order.order_id}
 
+    from apps.commerce.mandate import verify_mandate, MandateError
+    from apps.commerce.models import PurchaseMandate
+    try:
+        mandate = PurchaseMandate.objects.select_related("intent__task__agent", "intent__product").get(intent=intent)
+        verify_mandate(mandate, intent.intent_id)
+    except PurchaseMandate.DoesNotExist:
+        return {"status": "error", "reason": "MANDATE_NOT_FOUND"}
+    except MandateError as exc:
+        return {"status": "error", "reason": "MANDATE_VERIFICATION_FAILED", "detail": str(exc)}
+
     client = get_client()
     rzp_order = client.order.create({
         "amount": intent.canonical_amount_minor,
@@ -210,6 +220,16 @@ def finalize_payment(arguments: dict) -> dict:
         return {"status": "error", "reason": "ORDER_NOT_FOUND"}
     if order.razorpay_order_id != razorpay_order_id:
         return {"status": "error", "reason": "ORDER_ID_MISMATCH"}
+
+    from apps.commerce.mandate import verify_mandate, MandateError
+    from apps.commerce.models import PurchaseMandate
+    try:
+        mandate = PurchaseMandate.objects.select_related("intent__task__agent", "intent__product").get(intent=intent)
+        verify_mandate(mandate, intent.intent_id)
+    except PurchaseMandate.DoesNotExist:
+        return {"status": "error", "reason": "MANDATE_NOT_FOUND"}
+    except MandateError as exc:
+        return {"status": "error", "reason": "MANDATE_VERIFICATION_FAILED", "detail": str(exc)}
 
     client = get_client()
     try:

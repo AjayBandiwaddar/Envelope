@@ -1,6 +1,8 @@
 from __future__ import annotations
 from django.db import transaction
-from apps.commerce.models import PurchaseIntent, PurchaseIntentStatus
+from apps.commerce.mandate import build_and_sign_mandate
+from apps.commerce.models import PurchaseIntent, PurchaseIntentStatus, PurchaseMandate
+from django.conf import settings
 from apps.policies.models import Policy, PolicyEffect, ResourceScopeMode
 from apps.tools.models import Tool
 
@@ -56,6 +58,15 @@ def confirm_purchase_intent(intent_id: str) -> list[Policy]:
                     constraints=tool_constraints[tool_id],
                 )
             )
+        payload, signature = build_and_sign_mandate(intent)
+        PurchaseMandate.objects.create(
+            mandate_id=payload["mandate_id"],
+            intent=intent,
+            payload=payload,
+            signature=signature,
+            public_key_id=settings.MANDATE_KEY_ID,
+        )
+
         intent.status = PurchaseIntentStatus.AUTHORIZED
         intent.save(update_fields=["status", "updated_at"])
     return policies

@@ -145,6 +145,9 @@ RAZORPAY_KEY_ID = env("RAZORPAY_KEY_ID", default="")
 RAZORPAY_KEY_SECRET = env("RAZORPAY_KEY_SECRET", default="")
 DEMO_AGENT_TOKEN = env("DEMO_AGENT_TOKEN", default="")
 DEMO_TASK_ID = env("DEMO_TASK_ID", default="demo-buyer-task")
+MANDATE_PRIVATE_KEY = env("MANDATE_PRIVATE_KEY", default="")
+MANDATE_PUBLIC_KEY = env("MANDATE_PUBLIC_KEY", default="")
+MANDATE_KEY_ID = env("MANDATE_KEY_ID", default="mandate-key-1")
 
 # Default task lifetime when a caller doesn't specify expires_at
 # (API_SPEC.md Section 8.1's create-task example doesn't show an

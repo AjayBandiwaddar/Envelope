@@ -90,3 +90,26 @@ class Order(models.Model):
 
     def __str__(self) -> str:
         return self.order_id
+
+class PurchaseMandate(models.Model):
+    """
+    A cryptographically signed, tamper-evident proof of exactly what was
+    authorized for one purchase intent - structurally modeled on AP2's
+    Cart Mandate pattern (Google's open agent-payments protocol, which
+    uses signed mandates as portable proof of user-authorized purchases),
+    using a simplified single-keypair Ed25519 signature rather than AP2's
+    full W3C Verifiable Credential chain. This is a second, independent
+    proof layer on top of the Policy engine, not a replacement for it:
+    Policy answers "is this action permitted now"; the mandate answers
+    "can we prove, independent of trusting our own database, exactly
+    what was authorized, and that nothing about it has changed since."
+    """
+    mandate_id = models.SlugField(max_length=100, unique=True)
+    intent = models.OneToOneField(PurchaseIntent, on_delete=models.PROTECT, related_name="mandate")
+    payload = models.JSONField()
+    signature = models.CharField(max_length=200)
+    public_key_id = models.CharField(max_length=100)
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    def __str__(self) -> str:
+        return self.mandate_id
