@@ -287,7 +287,7 @@ DEFAULT_TOOLS = [
     {"tool_id": "propose_purchase_intent", "name": "Propose Purchase Intent", "service": "commerce", "risk_level": "LOW",
      "input_schema": {"task_id": {}, "product_id": {}, "quantity": {}}},
     {"tool_id": "create_order", "name": "Create Order", "service": "commerce", "risk_level": "MEDIUM",
-     "input_schema": {"intent_id": {}, "amount": {}, "currency": {}}},
+     "input_schema": {"intent_id": {}}},
     {"tool_id": "finalize_payment", "name": "Finalize Payment", "service": "commerce", "risk_level": "HIGH",
      "input_schema": {"intent_id": {}, "razorpay_order_id": {}, "razorpay_payment_id": {}, "razorpay_signature": {}}},
     {"tool_id": "list_products", "name": "List Products", "service": "commerce", "risk_level": "LOW",

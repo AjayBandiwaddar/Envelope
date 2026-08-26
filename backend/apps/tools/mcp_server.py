@@ -157,8 +157,8 @@ async def propose_purchase_intent(task_id: str, product_id: str, quantity: int =
     )
 
 @mcp_server.tool()
-async def create_order(task_id: str, intent_id: str, amount: int, currency: str) -> dict:
-    """Create the order for a confirmed purchase intent. Only succeeds if the intent was confirmed by the user and this amount is within the authorized ceiling."""
+async def create_order(task_id: str, intent_id: str) -> dict:
+    """Create the order for a confirmed purchase intent. Amount and currency are derived entirely server-side from the confirmed intent - never accepted as arguments."""
     return await _dispatch(
         tool_id="create_order",
         action="create_order",
@@ -166,7 +166,7 @@ async def create_order(task_id: str, intent_id: str, amount: int, currency: str)
         task_id=task_id,
         resource_type="purchase_intent",
         resource_id=intent_id,
-        parameters={"intent_id": intent_id, "amount": amount, "currency": currency},
+        parameters={"intent_id": intent_id},
     )
 
 @mcp_server.tool()

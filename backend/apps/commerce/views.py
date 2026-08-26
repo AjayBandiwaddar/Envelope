@@ -116,11 +116,7 @@ def start_purchase_view(request, product_id):
         tool_id="create_order", action="create_order",
         agent_token=settings.DEMO_AGENT_TOKEN, task_id=task_id,
         resource_type="purchase_intent", resource_id=intent_id,
-        parameters={
-            "intent_id": intent_id,
-            "amount": propose["result"]["canonical_amount_minor"],
-            "currency": propose["result"]["currency"],
-        },
+        parameters={"intent_id": intent_id},
     )
     if create["decision"] != "ALLOW" or create["result"].get("status") != "ok":
         return HttpResponse(f"Could not create order: {create}", status=400)
