@@ -72,8 +72,9 @@ def checkout_view(request, order_id):
             headers: {{"Content-Type": "application/json"}},
             body: JSON.stringify(response),
           }}).then(function () {{
-            document.getElementById('result').textContent =
-              "Payment received - you can close this tab, the agent will pick it up automatically.";
+            document.getElementById('result').innerHTML =
+              "Payment received - you can close this tab, the agent will pick it up automatically." +
+              '<br><br><a href="/checkout/{order.purchase_intent.intent_id}/audit/" class="btn btn-outline-primary btn-sm">View purchase audit</a>';
           }});
         }}
       }};
@@ -82,6 +83,48 @@ def checkout_view(request, order_id):
   </script>
 </body></html>"""
     return HttpResponse(html)
+
+
+def audit_trail_view(request, intent_id):
+    """
+    Server-rendered decision timeline for one purchase. Re-verifies the
+    mandate signature live on every load - this page is independent
+    proof, not a cached claim. A missing or corrupted mandate must never
+    crash this page; every failure path resolves to an explicit status
+    instead of an unhandled exception.
+    """
+    from apps.commerce.models import PurchaseIntent
+    from apps.commerce.mandate import verify_mandate, MandateError
+    from apps.audit.models import AuditEvent
+
+    intent = get_object_or_404(
+        PurchaseIntent.objects.select_related("task__agent", "product"), intent_id=intent_id
+    )
+    events = AuditEvent.objects.filter(resource_id=intent_id).order_by("timestamp")
+    order = getattr(intent, "order", None)
+    mandate = getattr(intent, "mandate", None)
+
+    mandate_status = "UNAVAILABLE"
+    mandate_detail = None
+    if mandate is not None:
+        try:
+            verify_mandate(mandate, intent_id)
+            mandate_status = "VERIFIED"
+        except MandateError as exc:
+            mandate_status = "VERIFICATION_FAILED"
+            mandate_detail = str(exc)
+        except Exception as exc:  # noqa: BLE001 - this page must never 500, fail to a visible state instead
+            mandate_status = "UNAVAILABLE"
+            mandate_detail = str(exc)
+
+    return render(request, "commerce/audit_trail.html", {
+        "intent": intent,
+        "events": events,
+        "order": order,
+        "mandate": mandate,
+        "mandate_status": mandate_status,
+        "mandate_detail": mandate_detail,
+    })
 
 
 def start_purchase_view(request, product_id):

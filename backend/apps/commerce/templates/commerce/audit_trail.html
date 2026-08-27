@@ -1,0 +1,93 @@
+{% load static %}
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, shrink-to-fit=no">
+  <title>Purchase Audit - {{ intent.intent_id }}</title>
+  <link rel="stylesheet" href="https://use.fontawesome.com/releases/v5.11.2/css/all.css">
+  <link href="{% static 'commerce/css/bootstrap.min.css' %}" rel="stylesheet">
+  <link href="{% static 'commerce/css/mdb.min.css' %}" rel="stylesheet">
+  <link href="{% static 'commerce/css/style.min.css' %}" rel="stylesheet">
+</head>
+<body>
+  <nav class="navbar fixed-top navbar-expand-lg navbar-light white scrolling-navbar">
+    <div class="container">
+      <a class="navbar-brand waves-effect" href="{% url 'catalog' %}">
+        <strong class="blue-text">Reference Merchant</strong>
+      </a>
+    </div>
+  </nav>
+
+  <main class="mt-5 pt-4">
+    <div class="container">
+      <h2 class="h1-responsive font-weight-bold my-4">Purchase Audit</h2>
+      <p class="grey-text">
+        Intent: <code>{{ intent.intent_id }}</code> &middot;
+        Product: {{ intent.product.name }} &middot;
+        Amount: &#8377;{% widthratio intent.canonical_amount_minor 100 1 %} {{ intent.currency }}
+      </p>
+
+      <div class="card mb-4">
+        <div class="card-body">
+          <h5 class="card-title">Cryptographic Mandate</h5>
+          {% if mandate_status == "VERIFIED" %}
+            <p class="text-success"><i class="fas fa-check-circle mr-2"></i><strong>VERIFIED</strong> - signature and all bound fields match current database state (checked live, on this page load).</p>
+            <p class="grey-text small mb-0">Mandate ID: <code>{{ mandate.mandate_id }}</code></p>
+            <p class="grey-text small">Signed amount: &#8377;{% widthratio mandate.payload.amount_minor 100 1 %} {{ mandate.payload.currency }}</p>
+            <p class="grey-text small">Issued: {{ mandate.payload.issued_at }} &middot; Expires: {{ mandate.payload.expires_at }}</p>
+          {% elif mandate_status == "VERIFICATION_FAILED" %}
+            <p class="text-danger"><i class="fas fa-times-circle mr-2"></i><strong>VERIFICATION FAILED</strong></p>
+            <p class="grey-text small">{{ mandate_detail }}</p>
+          {% else %}
+            <p class="text-muted"><i class="fas fa-question-circle mr-2"></i><strong>UNAVAILABLE</strong> - no mandate found or verification could not run.</p>
+            {% if mandate_detail %}<p class="grey-text small">{{ mandate_detail }}</p>{% endif %}
+          {% endif %}
+        </div>
+      </div>
+
+      {% if order %}
+      <div class="card mb-4">
+        <div class="card-body">
+          <h5 class="card-title">Order &amp; Payment</h5>
+          <p class="mb-1">Order: <code>{{ order.order_id }}</code></p>
+          <p class="mb-1">Razorpay Order: <code>{{ order.razorpay_order_id }}</code></p>
+          {% if order.razorpay_payment_id %}<p class="mb-1">Razorpay Payment: <code>{{ order.razorpay_payment_id }}</code></p>{% endif %}
+          <p class="mb-0">Status:
+            <span class="badge {% if order.status == 'PAID' %}green{% elif order.status == 'FAILED' %}red{% else %}blue-grey{% endif %}">{{ order.status }}</span>
+          </p>
+        </div>
+      </div>
+      {% endif %}
+
+      <h5 class="mb-3">Decision Timeline</h5>
+      <table class="table table-bordered">
+        <thead class="blue-grey lighten-4">
+          <tr><th>Time</th><th>Action</th><th>Decision</th><th>Reason</th><th>Policy</th></tr>
+        </thead>
+        <tbody>
+          {% for event in events %}
+          <tr>
+            <td class="small">{{ event.timestamp }}</td>
+            <td>{{ event.action }}</td>
+            <td><span class="badge {% if event.decision == 'ALLOW' %}green{% else %}red{% endif %}">{{ event.decision }}</span></td>
+            <td class="small">{{ event.reason_code }}{% if event.reason %} - {{ event.reason }}{% endif %}</td>
+            <td class="small">{{ event.policy_id|default:"-" }}</td>
+          </tr>
+          {% empty %}
+          <tr><td colspan="5" class="text-center grey-text">No audit events found for this purchase.</td></tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+  </main>
+
+  <footer class="page-footer text-center font-small mt-4">
+    <div class="footer-copyright py-3">Reference Merchant - Razorpay AI Buildathon 2026.</div>
+  </footer>
+
+  <script type="text/javascript" src="{% static 'commerce/js/jquery-3.4.1.min.js' %}"></script>
+  <script type="text/javascript" src="{% static 'commerce/js/bootstrap.min.js' %}"></script>
+  <script type="text/javascript" src="{% static 'commerce/js/mdb.min.js' %}"></script>
+</body>
+</html>
