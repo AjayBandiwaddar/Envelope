@@ -13,6 +13,7 @@ no `/api/internal/tools/{tool_id}/execute/` route anywhere in urls.py.
 
 from __future__ import annotations
 
+from apps.audit.models import AuditEvent
 from apps.authorization.engine import AuthorizationDecision, Decision
 from apps.tools.handlers import TOOL_HANDLERS
 from apps.tools.models import Tool, ToolExecution, ToolStatus
@@ -62,6 +63,19 @@ def execute_tool(
         raise ToolExecutionDenied(f"Refusing to execute: no handler registered for '{tool_id}'.")
 
     result = handler(arguments)
+
+    # Opt-in convention: a handler may report the id of something it just
+    # created that did not exist yet when authorize() persisted this call's
+    # AuditEvent (e.g. propose_purchase_intent's intent_id). Popped here so
+    # these keys never leak into the actual tool result returned to the
+    # caller or persisted on ToolExecution.
+    audit_resource_type = result.pop("_audit_resource_type", None)
+    audit_resource_id = result.pop("_audit_resource_id", None)
+    if audit_resource_id and request_id:
+        AuditEvent.objects.filter(request_id=request_id).update(
+            resource_type=audit_resource_type or "",
+            resource_id=audit_resource_id,
+        )
 
     ToolExecution.objects.create(
         tool_id=tool_id,

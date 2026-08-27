@@ -129,6 +129,8 @@ def propose_purchase_intent(arguments: dict) -> dict:
         "canonical_amount_minor": canonical_amount_minor,
         "currency": product.currency,
         "intent_status": intent.status,
+        "_audit_resource_type": "purchase_intent",
+        "_audit_resource_id": intent.intent_id,
     }
 def create_order(arguments: dict) -> dict:
     """
