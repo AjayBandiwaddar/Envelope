@@ -97,6 +97,24 @@ def build_and_sign_mandate(intent) -> tuple[dict, str]:
     return payload, base64.b64encode(signature).decode()
 
 
+def verify_signature_only(mandate) -> bool:
+    """
+    Pure, narrow check: does the stored signature match the stored
+    payload? Never raises, never checks expiry/intent binding/DB state -
+    this exists only so the audit page can display the signature-integrity
+    fact on its own, separately from the other checks. It plays no role
+    in the actual authorization gate; verify_mandate() below is
+    unchanged and remains the only thing create_order/finalize_payment
+    trust.
+    """
+    try:
+        public_key = _load_public_key()
+        public_key.verify(base64.b64decode(mandate.signature), _canonical_bytes(mandate.payload))
+        return True
+    except Exception:  # noqa: BLE001 - display-only helper, any failure means "not valid" for this purpose
+        return False
+
+
 def verify_mandate(mandate, intent_id: str) -> dict:
     """
     Full chain, in order, stopping at the first failure:

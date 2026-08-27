@@ -95,6 +95,7 @@ def audit_trail_view(request, intent_id):
     """
     from apps.commerce.models import PurchaseIntent
     from apps.commerce.mandate import verify_mandate, MandateError
+    from datetime import datetime
     from apps.audit.models import AuditEvent
 
     intent = get_object_or_404(
@@ -104,9 +105,16 @@ def audit_trail_view(request, intent_id):
     order = getattr(intent, "order", None)
     mandate = getattr(intent, "mandate", None)
 
+    from apps.commerce.mandate import verify_signature_only
+
     mandate_status = "UNAVAILABLE"
     mandate_detail = None
+    signature_valid = None
+    not_expired = None
     if mandate is not None:
+        signature_valid = verify_signature_only(mandate)
+        expires_at_raw = mandate.payload.get("expires_at")
+        not_expired = bool(expires_at_raw) and timezone.now() <= datetime.fromisoformat(expires_at_raw)
         try:
             verify_mandate(mandate, intent_id)
             mandate_status = "VERIFIED"
@@ -124,6 +132,8 @@ def audit_trail_view(request, intent_id):
         "mandate": mandate,
         "mandate_status": mandate_status,
         "mandate_detail": mandate_detail,
+        "signature_valid": signature_valid,
+        "not_expired": not_expired,
     })
 
 

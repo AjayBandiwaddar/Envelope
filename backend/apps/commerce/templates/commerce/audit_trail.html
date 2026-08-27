@@ -33,6 +33,16 @@
           <h5 class="card-title">Cryptographic Mandate</h5>
           {% if mandate_status == "VERIFIED" %}
             <p class="text-success"><i class="fas fa-check-circle mr-2"></i><strong>VERIFIED</strong> - signature and all bound fields match current database state (checked live, on this page load).</p>
+          {% endif %}
+          {% if signature_valid is not None %}
+            <p class="mb-1 {% if signature_valid %}text-success{% else %}text-danger{% endif %}">
+              {% if signature_valid %}&#10003; Signature valid{% else %}&#10007; Signature invalid{% endif %}
+            </p>
+            <p class="mb-1 {% if not_expired %}text-success{% else %}text-danger{% endif %}">
+              {% if not_expired %}&#10003; Not expired (expires {{ mandate.payload.expires_at }}){% else %}&#10007; Expired (expired {{ mandate.payload.expires_at }}){% endif %}
+            </p>
+          {% endif %}
+          {% if mandate_status == "VERIFIED" %}
             <p class="grey-text small mb-0">Mandate ID: <code>{{ mandate.mandate_id }}</code></p>
             <p class="grey-text small">Signed amount: &#8377;{% widthratio mandate.payload.amount_minor 100 1 %} {{ mandate.payload.currency }}</p>
             <p class="grey-text small">Issued: {{ mandate.payload.issued_at }} &middot; Expires: {{ mandate.payload.expires_at }}</p>
