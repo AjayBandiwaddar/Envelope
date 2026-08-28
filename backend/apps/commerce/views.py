@@ -175,3 +175,108 @@ def start_purchase_view(request, product_id):
         return HttpResponse(f"Could not create order: {create}", status=400)
 
     return redirect("checkout", order_id=create["result"]["order_id"])
+
+def security_demo_view(request):
+    """
+    Runs one of three real attack scenarios against the actual
+    dispatch_tool_call() path, using fresh disposable Agent/Task/Intent
+    data each time - safe to click repeatedly, never touches real
+    storefront demo data.
+    """
+    scenario = request.POST.get("scenario") if request.method == "POST" else None
+    result = _run_security_scenario(scenario) if scenario else None
+    return render(request, "commerce/security_demo.html", {"result": result, "scenario": scenario})
+
+
+def _run_security_scenario(scenario: str) -> dict:
+    import uuid
+    from django.utils import timezone
+    from datetime import timedelta
+    from apps.agents.models import Agent, AgentStatus
+    from apps.tasks.models import Task, TaskStatus
+    from apps.policies.models import Policy, PolicyEffect, ResourceScopeMode
+    from apps.tools.models import Tool
+    from apps.commerce.models import Product, PurchaseMandate
+    from apps.commerce.authorization import confirm_purchase_intent
+    from apps.tools.mcp_dispatch import dispatch_tool_call
+    from apps.commerce.razorpay_client import get_order_create_call_count
+
+    suffix = uuid.uuid4().hex[:8]
+    product = Product.objects.filter(active=True).first()
+    if not product:
+        return {"error": "No products found - run `python manage.py seed_products` first."}
+
+    agent = Agent.objects.create(agent_id=f"secdemo-agent-{suffix}", name="Security Demo Agent", status=AgentStatus.ACTIVE)
+    task = Task.objects.create(
+        task_id=f"secdemo-task-{suffix}", agent=agent, user_id="secdemo-user",
+        status=TaskStatus.ACTIVE, expires_at=timezone.now() + timedelta(minutes=30),
+    )
+    raw_token = agent.issue_token()
+
+    Policy.objects.create(
+        policy_id=f"policy-{task.task_id}-propose-intent",
+        name="Standing: propose purchase intent (security demo)",
+        effect=PolicyEffect.ALLOW,
+        agent_scope=agent, task_scope=task,
+        tool_scope=Tool.objects.get(tool_id="propose_purchase_intent"),
+        allowed_actions=["propose_purchase_intent"],
+        resource_mode=ResourceScopeMode.NONE,
+    )
+
+    propose = dispatch_tool_call(
+        tool_id="propose_purchase_intent", action="propose_purchase_intent",
+        agent_token=raw_token, task_id=task.task_id, resource_type="", resource_id=None,
+        parameters={"task_id": task.task_id, "product_id": product.product_id, "quantity": 1},
+    )
+    intent_id = propose["result"]["intent_id"]
+    before_count = get_order_create_call_count()
+
+    if scenario == "skip_confirmation":
+        label = "Skip Confirmation"
+        explanation = "Attempting create_order on a proposed but never-confirmed intent - no Policy exists yet for this tool."
+        response = dispatch_tool_call(
+            tool_id="create_order", action="create_order",
+            agent_token=raw_token, task_id=task.task_id,
+            resource_type="purchase_intent", resource_id=intent_id,
+            parameters={"intent_id": intent_id},
+        )
+
+    elif scenario == "unknown_parameter":
+        label = "Unknown Parameter Injection"
+        explanation = "Confirming normally, then attempting create_order with an extra, undeclared parameter."
+        confirm_purchase_intent(intent_id)
+        response = dispatch_tool_call(
+            tool_id="create_order", action="create_order",
+            agent_token=raw_token, task_id=task.task_id,
+            resource_type="purchase_intent", resource_id=intent_id,
+            parameters={"intent_id": intent_id, "override_policy": True},
+        )
+
+    elif scenario == "tampered_mandate":
+        label = "Tampered Mandate"
+        explanation = "Confirming normally (signs a real mandate), then editing the stored payload directly before attempting create_order."
+        confirm_purchase_intent(intent_id)
+        mandate = PurchaseMandate.objects.get(intent__intent_id=intent_id)
+        mandate.payload["amount_minor"] = 100
+        mandate.save()
+        response = dispatch_tool_call(
+            tool_id="create_order", action="create_order",
+            agent_token=raw_token, task_id=task.task_id,
+            resource_type="purchase_intent", resource_id=intent_id,
+            parameters={"intent_id": intent_id},
+        )
+
+    else:
+        return {"error": f"Unknown scenario '{scenario}'."}
+
+    after_count = get_order_create_call_count()
+
+    return {
+        "label": label,
+        "explanation": explanation,
+        "decision": response.get("decision"),
+        "reason_code": response.get("reason_code"),
+        "reason": response.get("reason"),
+        "result": response.get("result"),
+        "razorpay_calls_made": after_count - before_count,
+    }

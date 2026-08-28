@@ -144,7 +144,7 @@ def create_order(arguments: dict) -> dict:
     import uuid
     from django.conf import settings
     from apps.commerce.models import Order, OrderStatus, PurchaseIntent, PurchaseIntentStatus
-    from apps.commerce.razorpay_client import get_client
+    from apps.commerce.razorpay_client import create_razorpay_order
 
     intent_id = arguments.get("intent_id")
     try:
@@ -168,8 +168,7 @@ def create_order(arguments: dict) -> dict:
     except MandateError as exc:
         return {"status": "error", "reason": "MANDATE_VERIFICATION_FAILED", "detail": str(exc)}
 
-    client = get_client()
-    rzp_order = client.order.create({
+    rzp_order = create_razorpay_order({
         "amount": intent.canonical_amount_minor,
         "currency": intent.currency,
         "receipt": intent.intent_id,
@@ -204,7 +203,7 @@ def finalize_payment(arguments: dict) -> dict:
     cryptographic check, not a status flag we trust on the agent's word.
     """
     from apps.commerce.models import Order, OrderStatus, PurchaseIntent, PurchaseIntentStatus
-    from apps.commerce.razorpay_client import get_client
+    from apps.commerce.razorpay_client import create_razorpay_order
     import razorpay.errors
 
     intent_id = arguments.get("intent_id")

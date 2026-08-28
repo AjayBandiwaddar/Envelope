@@ -6,7 +6,8 @@ from .views import (
     start_purchase_view,
     payment_callback_view,
     payment_status_view,
-     audit_trail_view,
+    audit_trail_view,
+    security_demo_view,
 )
 
 urlpatterns = [
@@ -17,4 +18,5 @@ urlpatterns = [
     path("checkout/<str:order_id>/callback/", payment_callback_view, name="payment-callback"),
     path("checkout/<str:order_id>/status/", payment_status_view, name="payment-status"),
     path("checkout/<str:intent_id>/audit/", audit_trail_view, name="audit-trail"),
+    path("security-demo/", security_demo_view, name="security-demo"),
 ]
