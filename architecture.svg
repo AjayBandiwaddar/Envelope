@@ -1,0 +1,65 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1180" height="910" viewBox="0 0 1180 910">
+<rect width="1180" height="910" fill="#ffffff"/>
+
+<defs>
+  <marker id="arrow" markerWidth="10" markerHeight="10" refX="8" refY="3" orient="auto" markerUnits="strokeWidth">
+    <path d="M0,0 L0,6 L9,3 z" fill="#555"/>
+  </marker>
+  <marker id="arrowRed" markerWidth="10" markerHeight="10" refX="8" refY="3" orient="auto" markerUnits="strokeWidth">
+    <path d="M0,0 L0,6 L9,3 z" fill="#c0392b"/>
+  </marker>
+</defs>
+
+<text x="590" y="40" font-size="19" font-weight="bold" text-anchor="middle" fill="#1a1a2e" font-family="Segoe UI, Arial, sans-serif">Agentic Commerce Architecture — Razorpay AI Buildathon 2026, Track 1</text>
+<text x="590" y="62" font-size="12.5" font-weight="normal" text-anchor="middle" fill="#666" font-family="Segoe UI, Arial, sans-serif">AI decides what to buy. The firewall decides what it's allowed to do. Razorpay decides the outcome. The audit trail records everything.</text>
+<rect x="450" y="90" width="280" height="46" rx="10" fill="#f4f4f4" stroke="#999" stroke-width="2"/>
+<text x="590" y="119" font-size="14" font-weight="bold" text-anchor="middle" fill="#1a1a2e" font-family="Segoe UI, Arial, sans-serif">USER — natural-language request</text>
+<line x1="590" y1="136" x2="590" y2="166" stroke="#555" stroke-width="2.5" marker-end="url(#arrow)"/>
+<rect x="270" y="166" width="640" height="100" rx="10" fill="#eaf2ff" stroke="#2f5fa8" stroke-width="2"/>
+<text x="590" y="188" font-size="14.5" font-weight="bold" text-anchor="middle" fill="#1c3d6e" font-family="Segoe UI, Arial, sans-serif">SYSTEM 3 — AI Buyer Agent  (agent/buyer.py)</text>
+<text x="590" y="208" font-size="12.5" font-weight="normal" text-anchor="middle" fill="#1c3d6e" font-family="Segoe UI, Arial, sans-serif">Google Gemini (free tier) as a real MCP CLIENT — not a copy of the tool schema</text>
+<text x="590" y="226" font-size="12.5" font-weight="normal" text-anchor="middle" fill="#1c3d6e" font-family="Segoe UI, Arial, sans-serif">Reasons over the real catalog, proposes a product — cannot confirm its own purchase</text>
+<line x1="590" y1="266" x2="590" y2="294" stroke="#555" stroke-width="2.5" marker-end="url(#arrow)"/>
+<rect x="270" y="294" width="640" height="92" rx="10" fill="#eafaf0" stroke="#2e8b57" stroke-width="2"/>
+<text x="590" y="316" font-size="14.5" font-weight="bold" text-anchor="middle" fill="#1f5c3a" font-family="Segoe UI, Arial, sans-serif">SYSTEM 2 — Reference Merchant</text>
+<text x="590" y="336" font-size="12.5" font-weight="normal" text-anchor="middle" fill="#1f5c3a" font-family="Segoe UI, Arial, sans-serif">Real MCP server (discovery: list_products) · schema.org Product/Offer data</text>
+<text x="590" y="354" font-size="12.5" font-weight="normal" text-anchor="middle" fill="#1f5c3a" font-family="Segoe UI, Arial, sans-serif">Storefront catalog — prices are canonical, server-derived, never agent-supplied</text>
+<line x1="590" y1="386" x2="590" y2="414" stroke="#555" stroke-width="2.5" marker-end="url(#arrow)"/>
+<rect x="390" y="414" width="400" height="46" rx="10" fill="#fff7e0" stroke="#c8961e" stroke-width="2"/>
+<text x="590" y="443" font-size="13" font-weight="bold" text-anchor="middle" fill="#7a5c0a" font-family="Segoe UI, Arial, sans-serif">PurchaseIntent — price locked in from the DB, right now</text>
+<line x1="590" y1="460" x2="590" y2="488" stroke="#555" stroke-width="2.5" marker-end="url(#arrow)"/>
+<rect x="370" y="488" width="440" height="52" rx="26" fill="#fdecea" stroke="#c0392b" stroke-width="2"/>
+<text x="590" y="510" font-size="14.5" font-weight="bold" text-anchor="middle" fill="#a5281b" font-family="Segoe UI, Arial, sans-serif">HUMAN CONFIRMATION</text>
+<text x="590" y="528" font-size="11.5" font-weight="normal" text-anchor="middle" fill="#a5281b" font-family="Segoe UI, Arial, sans-serif">not an MCP tool — the agent structurally cannot call this</text>
+<line x1="590" y1="540" x2="590" y2="568" stroke="#555" stroke-width="2.5" marker-end="url(#arrow)"/>
+<rect x="270" y="568" width="640" height="150" rx="10" fill="#f3ecfb" stroke="#6c3fa8" stroke-width="2"/>
+<text x="590" y="590" font-size="14" font-weight="bold" text-anchor="middle" fill="#432467" font-family="Segoe UI, Arial, sans-serif">SYSTEM 1 — Agent Action Firewall  (pre-existing, extended for commerce)</text>
+<rect x="290" y="602" width="300" height="100" rx="10" fill="#ffffff" stroke="#6c3fa8" stroke-width="2"/>
+<text x="440" y="622" font-size="13" font-weight="bold" text-anchor="middle" fill="#432467" font-family="Segoe UI, Arial, sans-serif">Policy Engine</text>
+<text x="440" y="640" font-size="11.5" font-weight="normal" text-anchor="middle" fill="#432467" font-family="Segoe UI, Arial, sans-serif">Deterministic ALLOW/DENY</text>
+<text x="440" y="656" font-size="11.5" font-weight="normal" text-anchor="middle" fill="#432467" font-family="Segoe UI, Arial, sans-serif">No implicit allow, anywhere</text>
+<text x="440" y="672" font-size="11.5" font-weight="normal" text-anchor="middle" fill="#432467" font-family="Segoe UI, Arial, sans-serif">Confused-deputy protection</text>
+<rect x="592" y="602" width="300" height="100" rx="10" fill="#ffffff" stroke="#6c3fa8" stroke-width="2"/>
+<text x="742" y="622" font-size="13" font-weight="bold" text-anchor="middle" fill="#432467" font-family="Segoe UI, Arial, sans-serif">Cryptographic Mandate</text>
+<text x="742" y="640" font-size="11.5" font-weight="normal" text-anchor="middle" fill="#432467" font-family="Segoe UI, Arial, sans-serif">Ed25519-signed proof of</text>
+<text x="742" y="656" font-size="11.5" font-weight="normal" text-anchor="middle" fill="#432467" font-family="Segoe UI, Arial, sans-serif">exactly what was authorized</text>
+<text x="742" y="672" font-size="11.5" font-weight="normal" text-anchor="middle" fill="#432467" font-family="Segoe UI, Arial, sans-serif">(AP2 Cart-Mandate analogue)</text>
+<line x1="590" y1="718" x2="590" y2="746" stroke="#555" stroke-width="2.5" marker-end="url(#arrow)"/>
+<rect x="370" y="746" width="440" height="48" rx="10" fill="#e8f6fd" stroke="#1f7ea8" stroke-width="2"/>
+<text x="590" y="776" font-size="12.5" font-weight="bold" text-anchor="middle" fill="#0f4d66" font-family="Segoe UI, Arial, sans-serif">Razorpay Test Mode — real Orders API, real Checkout, signature verified</text>
+<line x1="590" y1="794" x2="590" y2="822" stroke="#555" stroke-width="2.5" marker-end="url(#arrow)"/>
+<rect x="330" y="822" width="520" height="48" rx="10" fill="#f0f0f0" stroke="#555" stroke-width="2"/>
+<text x="590" y="852" font-size="12.5" font-weight="bold" text-anchor="middle" fill="#1a1a2e" font-family="Segoe UI, Arial, sans-serif">Audit Trail — every decision, ALLOW or DENY, permanently recorded</text>
+<line x1="910" y1="643" x2="950" y2="643" stroke="#c0392b" stroke-width="2.5" marker-end="url(#arrow)"/>
+<rect x="950" y="598" width="230" height="160" rx="10" fill="#fdecea" stroke="#c0392b" stroke-width="2"/>
+<text x="1065.0" y="618" font-size="13" font-weight="bold" text-anchor="middle" fill="#a5281b" font-family="Segoe UI, Arial, sans-serif">DENY paths</text>
+<text x="1065.0" y="638.0" font-size="11" font-weight="normal" text-anchor="middle" fill="#a5281b" font-family="Segoe UI, Arial, sans-serif">Skip confirmation →</text>
+<text x="1065.0" y="651.5" font-size="11" font-weight="normal" text-anchor="middle" fill="#a5281b" font-family="Segoe UI, Arial, sans-serif">POLICY_NOT_FOUND</text>
+<text x="1065.0" y="665.0" font-size="11" font-weight="normal" text-anchor="middle" fill="#a5281b" font-family="Segoe UI, Arial, sans-serif"></text>
+<text x="1065.0" y="678.5" font-size="11" font-weight="normal" text-anchor="middle" fill="#a5281b" font-family="Segoe UI, Arial, sans-serif">Unknown parameter →</text>
+<text x="1065.0" y="692.0" font-size="11" font-weight="normal" text-anchor="middle" fill="#a5281b" font-family="Segoe UI, Arial, sans-serif">UNKNOWN_PARAMETER</text>
+<text x="1065.0" y="705.5" font-size="11" font-weight="normal" text-anchor="middle" fill="#a5281b" font-family="Segoe UI, Arial, sans-serif"></text>
+<text x="1065.0" y="719.0" font-size="11" font-weight="normal" text-anchor="middle" fill="#a5281b" font-family="Segoe UI, Arial, sans-serif">Tampered mandate →</text>
+<text x="1065.0" y="732.5" font-size="11" font-weight="normal" text-anchor="middle" fill="#a5281b" font-family="Segoe UI, Arial, sans-serif">ALLOW, but blocked</text>
+<text x="590" y="890" font-size="11" font-weight="normal" text-anchor="middle" fill="#888" font-family="Segoe UI, Arial, sans-serif">Live at /security-demo/ and /checkout/{intent_id}/audit/ — razorpaybuildathon</text>
+</svg>

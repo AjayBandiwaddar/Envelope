@@ -1,951 +1,140 @@
-````markdown
-# README.md
+# Reference Merchant — Agentic Commerce with a Cryptographically Bound Firewall
 
-# Agent Action Firewall
+**Razorpay AI Buildathon 2026 — Track 1: AI Growth & Agentic Commerce**
 
-> A task-scoped authorization gateway that allows AI agents to execute tools only within explicitly defined permissions.
+> An AI agent can genuinely shop and pay a real merchant, end to end — but it can never authorize its own spending. Every money-relevant step is checked by a deterministic authorization firewall, backed by a cryptographically signed proof of exactly what was approved, with every decision — allowed or denied — permanently recorded.
 
-## Overview
-
-AI agents can now call APIs, tools, databases, and external services on behalf of users.
-
-The security problem is not only:
-
-> "Is this agent allowed to use this tool?"
-
-It is:
-
-> "Is this agent allowed to perform this exact action, on this exact resource, with these exact parameters, for this exact task, at this exact time?"
-
-Agent Action Firewall is a proof-of-concept implementation of that control layer.
-
-The system sits between an AI agent and its tools:
-
-```text
-AI Agent
-    │
-    │ proposes action
-    ▼
-┌──────────────────────────┐
-│   Agent Action Firewall  │
-│                          │
-│ Authentication           │
-│ Task authorization       │
-│ Policy evaluation        │
-│ Resource constraints     │
-│ Parameter constraints    │
-│ Rate limiting            │
-│ Audit logging            │
-└────────────┬─────────────┘
-             │
-        ALLOW│DENY
-             │
-             ▼
-        Tool / API
-````
-
-The central security principle is:
-
-> The LLM may propose an action. The deterministic policy engine decides whether it is allowed.
+![Architecture diagram](architecture.svg)
 
 ---
 
-# Why This Exists
+## Table of Contents
 
-Traditional application authorization often gives software broad permissions.
-
-For example:
-
-```text
-support-agent → can call refund_order()
-```
-
-For autonomous agents, that is too coarse.
-
-A user may authorize:
-
-```text
-Refund order #8291
-up to ₹5,000
-within the next 30 minutes
-```
-
-The agent should therefore be able to:
-
-```text
-refund_order(8291, ₹3,000)
-```
-
-but not:
-
-```text
-refund_order(8291, ₹50,000)
-refund_order(9999, ₹3,000)
-delete_customer(123)
-```
-
-The firewall turns those constraints into deterministic authorization checks.
+- [The Problem](#the-problem)
+- [Our Interpretation](#our-interpretation)
+- [What's Built — Three Systems](#whats-built--three-systems)
+- [The Purchase Flow](#the-purchase-flow)
+- [Security Guarantees](#security-guarantees)
+- [Live Failure Demonstrations](#live-failure-demonstrations)
+- [What We Explicitly Do Not Claim](#what-we-explicitly-do-not-claim)
+- [Known Limitations](#known-limitations)
+- [Tech Stack](#tech-stack)
+- [Running It Locally](#running-it-locally)
+- [Test Suite](#test-suite)
+- [Repository History](#repository-history)
+- [Credits](#credits)
 
 ---
 
-# Core Concept
-
-Authorization is evaluated against:
-
-```text
-Agent
-+
-User
-+
-Task
-+
-Action
-+
-Tool
-+
-Resource
-+
-Parameters
-+
-Time
-+
-Policy
-```
+## The Problem
 
-Conceptually:
+Razorpay's Track 1 asks for one of two things:
 
-```text
-                    REQUEST
-                       │
-                       ▼
-                 Authenticate
-                       │
-                       ▼
-                Validate input
-                       │
-                       ▼
-             Validate task authority
-                       │
-                       ▼
-               Evaluate policy
-                       │
-                ┌──────┴──────┐
-                │             │
-              ALLOW         DENY
-                │             │
-                ▼             ▼
-          Execute tool      Audit
-                │
-                ▼
-              Audit
-```
-
----
-
-# Key Features
-
-## Task-Scoped Authorization
-
-Permissions are tied to a specific task rather than permanently granting broad agent privileges.
-
-Example:
-
-```text
-Agent:
-support-agent-01
-
-Task:
-task-001
+> *"Build an agent that grows revenue for a merchant on Razorpay test-mode APIs, **or** that makes a merchant transactable by an AI buyer end to end."*
 
-Allowed action:
-refund_order
+with one non-negotiable bar, regardless of which path you pick:
 
-Allowed resource:
-order-8291
+> *"Every money action explainable, bounded and gated. Show the audit trail and one failure handled gracefully."*
 
-Maximum:
-₹5,000
+The track's own "why now" cites NPCI's UAP and the live protocol race between AP2, ACP, and x402 — 2026 is the year every major platform is racing to define how AI agents should be allowed to spend money on a human's behalf. Razorpay itself already piloted exactly this with NPCI and Claude in February 2026, letting AI agents place UPI orders on Zomato, Swiggy, and Zepto under spending limits.
 
-Expiration:
-30 minutes
-```
+## Our Interpretation
 
----
+We picked the harder path: **make a merchant transactable by an AI buyer, end to end** — not an upsell chatbot. This project is built on a pre-existing, independently developed project of ours, the **Agent Action Firewall**: a deterministic authorization gateway whose core principle — *"the AI agent may propose an action, but a deterministic authorization layer decides whether that exact action is permitted"* — is close to a direct match for the track's bar. We disclose this openly rather than presenting it as built from scratch (see [Repository History](#repository-history)): reusing tested, hardened infrastructure and spending the buildathon's time on the genuinely new parts — commerce logic, an AI buyer, and a cryptographic proof layer — is a deliberate engineering choice, not a shortcut.
 
-## Deterministic Policy Engine
+## What's Built — Three Systems
 
-The authorization decision is made by application logic.
+| | System | What it does |
+|---|---|---|
+| 1 | **Agent Action Firewall** | Extended for commerce. Decides ALLOW/DENY for every action an agent proposes, with zero implicit-allow paths, and signs a cryptographic **Purchase Mandate** — a simplified, honest analogue of [AP2](https://github.com/google-agentic-commerce/AP2)'s Cart Mandate — at the moment a human confirms a purchase. |
+| 2 | **Reference Merchant** | A real storefront (six laptops, real prices) exposing a genuine **MCP server** for agent discovery/purchase, plus `schema.org` structured data on every product page — a recognized vocabulary any commerce-literate agent could parse, not a bespoke API only our own agent understands. |
+| 3 | **AI Buyer Agent** | `agent/buyer.py` — a real **MCP client** using Google Gemini (free tier) to parse a natural-language request, browse the real catalog, and drive the purchase. It can propose a purchase; it structurally **cannot** confirm one. |
 
-The LLM does not decide:
+## The Purchase Flow
 
-```text
-"this looks safe"
-```
+1. **`propose_purchase_intent`** — the agent names a product and quantity. Price is looked up from the live database *right now* — never accepted from the agent.
+2. **Human confirmation** — a hard stop, outside the agent's reach. `confirm_purchase_intent` is not an MCP tool; there is no callable action for the agent to authorize its own purchase with.
+3. **`confirm_purchase_intent`** — writes the authorization `Policy` **and** signs the cryptographic `Mandate` for this exact transaction (product, quantity, amount, currency, expiry, nonce).
+4. **`create_order`** — accepts only an `intent_id`. No amount or currency parameter exists to spoof. Firewall checks the Policy *and* the Mandate; only then is a real Razorpay test-mode order created — atomically, so two concurrent attempts can never create two orders or make two provider calls.
+5. **Checkout** — a human completes payment via Razorpay Checkout. This is not a workaround: Razorpay requires a human-present payment step even in test mode, and we treat that as a second, independent consent layer rather than a limitation.
+6. **`finalize_payment`** — independently verifies Razorpay's payment signature (idempotent — safe to call twice) and marks the order `PAID`.
+7. **Audit trail** — every step above, ALLOW or DENY, is permanently recorded and viewable live at `/checkout/<intent_id>/audit/`, including a **live re-verification of the mandate signature on every page load** — not a cached status.
 
-The system evaluates explicit rules.
+## Security Guarantees
 
----
+- No implicit `ALLOW` anywhere in the policy engine — every path either matches an explicit rule or denies.
+- Unknown parameters are always rejected outright, never silently ignored.
+- The agent's credential never appears in any tool's callable schema.
+- Confused-deputy protection: a task belonging to another agent is indistinguishable from one that doesn't exist.
+- Prices are always server-derived; `create_order` has no amount/currency field to spoof at all.
+- The cryptographic mandate is checked against **live database state**, not just its own signature — a validly signed mandate that no longer matches reality is rejected.
+- Duplicate/concurrent order creation is prevented by a real database uniqueness constraint (portable across Postgres and SQLite) — proven with a genuine multithreaded concurrency test, not a mock.
+- `finalize_payment` is idempotent; a handler exception anywhere is caught and never crashes the pipeline or leaks internal detail.
+- Audit persistence is fail-closed: if the audit record can't be saved, the decision is downgraded to `DENY`.
 
-## Least Privilege
+## Live Failure Demonstrations
 
-Only the minimum required authority is granted.
+Available at **`/security-demo/`** — three real attacks, run through the actual code path with fresh disposable data every time, backed by a real invocation counter proving zero Razorpay calls on every denial:
 
-```text
-refund_order(order-8291, ₹3,000)
-→ ALLOW
+| Attack | Result |
+|---|---|
+| Skip human confirmation, then `create_order` | `DENY — POLICY_NOT_FOUND` |
+| `create_order` with an undeclared extra field | `DENY — UNKNOWN_PARAMETER` |
+| Tamper a signed mandate's amount, then `create_order` | Policy layer says `ALLOW` — the independent mandate check blocks it anyway |
 
-refund_order(order-8291, ₹8,000)
-→ DENY
+The third one is the centerpiece: two independent layers, either of which alone stops the attack. A standalone, rerunnable version also lives at `scripts/demo_tampered_mandate.py`.
 
-delete_customer(customer-123)
-→ DENY
-```
+## What We Explicitly Do Not Claim
 
----
+- **Not AP2-conformant.** We sign one server-side payload per transaction; real AP2 chains three W3C Verifiable-Credential mandates signed by the user's own wallet.
+- **No x402.** It's a stablecoin/crypto micropayment rail — doesn't fit an INR/Razorpay context, so we didn't bolt it on for coverage.
+- **No UCP implementation.** We researched Google/Shopify's Universal Commerce Protocol in depth and deliberately skipped even its lightweight discovery profile — our MCP server only runs over local stdio, and publishing a discovery document pointing at a non-network-reachable service would itself be a false claim.
+- **No nonce-based replay ledger.** The signed nonce exists for structural fidelity to the AP2 pattern; replay is actually prevented via the database's strict one-to-one `Order`↔`PurchaseIntent` relationship.
 
-## Tool Gateway
+## Known Limitations
 
-Tools cannot be executed directly by the agent.
+- MCP server is stdio-only, not publicly network-reachable.
+- Single hardcoded merchant, six-SKU catalog, no multi-merchant support.
+- No fulfillment/shipping concept — `Order` status stops at `PAID`/`FAILED`.
+- The Razorpay-invocation counter used in the live security demo is disclosed, process-local, in-memory instrumentation — resets on restart, not a production metric.
+- A narrow, documented distributed-transaction gap: a crash between Razorpay confirming an order and that ID being saved locally could theoretically orphan a provider-side order. Judged, based on testing, as not warranting full outbox/reconciliation infrastructure for this proof of concept.
+- Automated tests run against SQLite; local development runs against PostgreSQL — deliberate (the concurrency fix uses a uniqueness constraint portable to both, not a Postgres-only lock), not an oversight.
 
-They must pass through the authorization boundary.
+## Tech Stack
 
-```text
-Agent
-  ↓
-Tool request
-  ↓
-Authorization
-  ↓
-ALLOW
-  ↓
-Tool Gateway
-  ↓
-Tool
-```
-
----
+Python · Django · PostgreSQL (dev) / SQLite (tests) · Redis · [Model Context Protocol](https://modelcontextprotocol.io) (real server *and* real client) · Ed25519 (`cryptography`) · Razorpay Test Mode · Google Gemini (`gemini-3.5-flash`, free tier) · Bootstrap/MDBootstrap (MIT-licensed template) · `schema.org` · pytest (125+ tests, including real multithreaded concurrency tests)
 
-## Security Against Agent Abuse
-
-The POC tests:
-
-* privilege escalation
-* resource substitution
-* action substitution
-* parameter manipulation
-* expired authorization
-* revoked authorization
-* prompt injection
-* tool poisoning
-* unauthorized tools
-* policy tampering
-* confused-deputy scenarios
-* authentication bypass
-* fail-open behavior
-
----
-
-## Auditability
-
-Every authorization request produces an audit event containing relevant decision context.
-
-Example:
-
-```text
-Agent:
-support-agent-01
-
-Task:
-task-001
-
-Action:
-refund_order
-
-Resource:
-order-8291
-
-Requested amount:
-₹8,000
-
-Decision:
-DENY
-
-Reason:
-PARAMETER_LIMIT_EXCEEDED
-
-Policy:
-policy-refund-001
-```
-
----
-
-# Example
-
-## Task
-
-User asks:
-
-```text
-Refund order #8291 for up to ₹5,000.
-```
-
-The system creates task-scoped authority:
-
-```json
-{
-  "task_id": "task-001",
-  "agent_id": "support-agent-01",
-  "action": "refund_order",
-  "resource": {
-    "type": "order",
-    "id": "8291"
-  },
-  "constraints": {
-    "max_amount": 5000,
-    "currency": "INR"
-  }
-}
-```
-
-## Valid request
-
-```json
-{
-  "action": "refund_order",
-  "resource": {
-    "type": "order",
-    "id": "8291"
-  },
-  "parameters": {
-    "amount": 3000,
-    "currency": "INR"
-  }
-}
-```
-
-Result:
-
-```text
-ALLOW
-```
-
-The mock tool executes.
-
----
-
-## Unauthorized request
-
-```json
-{
-  "action": "refund_order",
-  "resource": {
-    "type": "order",
-    "id": "8291"
-  },
-  "parameters": {
-    "amount": 8000,
-    "currency": "INR"
-  }
-}
-```
-
-Result:
-
-```text
-DENY
-```
-
-The tool does not execute.
-
----
-
-# Security Principle
-
-The project deliberately separates:
-
-```text
-AI reasoning
-```
-
-from:
-
-```text
-authorization enforcement
-```
-
-An agent can be manipulated by:
-
-* prompt injection
-* malicious tool output
-* untrusted documents
-* malicious webpages
-* misleading user content
-
-The firewall does not assume the agent is trustworthy.
-
-Even if the agent proposes:
-
-```text
-refund_order(8291, 100000)
-```
-
-the deterministic policy engine independently evaluates the request.
-
----
-
-# Architecture
-
-```text
-                         React Dashboard
-                                │
-                                ▼
-                         Django REST API
-                                │
-                 ┌──────────────┼──────────────┐
-                 │              │              │
-                 ▼              ▼              ▼
-             Agents          Tasks          Policies
-                 │              │              │
-                 └──────────────┼──────────────┘
-                                ▼
-                       Authorization Service
-                                │
-                                ▼
-                         Deterministic
-                         Policy Engine
-                                │
-                         ┌──────┴──────┐
-                         │             │
-                       ALLOW         DENY
-                         │             │
-                         ▼             ▼
-                    Tool Gateway     Audit
-                         │
-                         ▼
-                    Mock Tools
-```
-
-Infrastructure:
-
-```text
-React
-   ↓
-Django
-   ├── PostgreSQL
-   └── Redis
-```
-
-MCP integration is used where practical for realistic agent-to-tool communication.
-
----
-
-# Technology Stack
-
-## Frontend
-
-* React
-* TypeScript
-* Vite
-* Tailwind CSS
-
-## Backend
-
-* Python
-* Django
-* Django REST Framework
-* Pydantic where useful
-
-## Database
-
-* PostgreSQL
-
-## Infrastructure
-
-* Redis
-* Docker
-* Docker Compose
-
-## Agent Tooling
-
-* MCP-compatible integration
-* Mock tool services
-
-## Testing
-
-* pytest
-* Django tests
-* API tests
-* security tests
-* adversarial tests
-* load tests
-
----
-
-# Repository Structure
-
-```text
-agent-action-firewall/
-│
-├── AGENTS.md
-├── README.md
-├── PRODUCT_SPEC.md
-├── ARCHITECTURE.md
-├── THREAT_MODEL.md
-├── POLICY_SPEC.md
-├── API_SPEC.md
-├── TEST_PLAN.md
-├── BENCHMARK_PLAN.md
-│
-├── backend/
-├── frontend/
-├── tests/
-│
-├── benchmarks/
-│
-├── docker-compose.yml
-└── .env.example
-```
-
-The specification files define the source of truth for the project.
-
----
-
-# Local Setup
-
-## Requirements
-
-Install:
-
-```text
-Python 3.12+
-Node.js 20+
-Docker
-Docker Compose
-Git
-```
-
----
-
-## Clone
+## Running It Locally
 
 ```bash
-git clone <repository-url>
-cd agent-action-firewall
+# Backend
+cd backend
+python manage.py migrate
+python manage.py seed_tools
+python manage.py seed_products
+python manage.py generate_mandate_keys   # copy printed keys into .env
+python manage.py seed_demo_agent         # copy printed token into .env
+python manage.py runserver
+
+# AI buyer agent (separate terminal)
+python agent/buyer.py "Find me the best laptop under 60000 rupees with at least 16GB RAM"
 ```
 
----
+Requires a `.env` at the repo root with `RAZORPAY_KEY_ID`, `RAZORPAY_KEY_SECRET`, `GEMINI_API_KEY`, `MANDATE_PRIVATE_KEY`, `MANDATE_PUBLIC_KEY`, `DEMO_AGENT_TOKEN` (all generated/printed by the commands above).
 
-## Environment
-
-Create:
+## Test Suite
 
 ```bash
-cp .env.example .env
-```
-
-Never commit `.env`.
-
----
-
-## Start Infrastructure
-
-```bash
-docker compose up -d postgres redis
-```
-
----
-
-## Backend
-
-Create the Python virtual environment:
-
-```bash
-python -m venv .venv
-```
-
-Activate it.
-
-Windows PowerShell:
-
-```powershell
-.\.venv\Scripts\Activate.ps1
-```
-
-Linux/macOS:
-
-```bash
-source .venv/bin/activate
-```
-
-Install dependencies:
-
-```bash
-pip install -r backend/requirements.txt
-```
-
-Run migrations:
-
-```bash
-python backend/manage.py migrate
-```
-
-Start Django:
-
-```bash
-python backend/manage.py runserver
-```
-
----
-
-## Frontend
-
-```bash
-cd frontend
-npm install
-npm run dev
-```
-
-The React development server should be available at:
-
-```text
-http://localhost:5173
-```
-
-The Django API should be available at:
-
-```text
-http://localhost:8000
-```
-
----
-
-# Running Tests
-
-From the repository root:
-
-```bash
+cd backend
 pytest
 ```
 
-Run security tests:
+125+ tests: the core policy engine, adversarial/security tests (unknown parameters, prompt-injection resistance, confused-deputy protection, real MCP-protocol integration), purchase-mandate signing/tampering/wrong-intent tests, audit-linkage correctness, all three live failure scenarios, and hardening tests including a genuine two-thread concurrency race proven against a real database.
 
-```bash
-pytest tests/security/
-```
+## Repository History
 
-Run API/integration tests:
+This repository was created by cloning our pre-existing [`agent-action-firewall`](https://github.com/AjayBandiwaddar/ai-firewall) project with its **full, real, dated commit history intact** — not copied and re-committed to fabricate the appearance of hackathon-period work. A single marker commit, `--- Buildathon work begins here (Track 1: AI Growth & Agentic Commerce) ---`, separates pre-existing work from buildathon work in the log itself. Three annotated tags mark each system's completion: `system-1-firewall`, `system-2-merchant`, `system-3-buyer-agent`.
 
-```bash
-pytest tests/api/ tests/integration/
-```
+## Credits
 
-The final CI pipeline should run the complete functional and security test suite.
-
----
-
-# Running the Demo
-
-The primary demo should follow this sequence:
-
-```text
-1. Register support-agent-01.
-
-2. Create task:
-   "Refund order #8291 up to ₹5,000."
-
-3. Create the corresponding task-scoped policy.
-
-4. Execute:
-   refund_order(8291, ₹3,000)
-
-   → ALLOW
-
-5. Execute:
-   refund_order(8291, ₹8,000)
-
-   → DENY
-
-6. Execute:
-   refund_order(9999, ₹3,000)
-
-   → DENY
-
-7. Execute:
-   delete_customer(123)
-
-   → DENY
-
-8. Open audit dashboard.
-
-9. Show all authorization decisions.
-
-10. Run security test suite.
-```
-
-The entire demonstration should be understandable within a few minutes.
-
----
-
-# Performance Benchmark
-
-The primary benchmark is the deterministic authorization gateway.
-
-We measure:
-
-```text
-RPS
-p50 latency
-p95 latency
-p99 latency
-error rate
-CPU
-memory
-database utilization
-Redis utilization
-```
-
-Target experiments:
-
-```text
-100 RPS
-1,000 RPS
-5,000 RPS
-10,000 RPS
-```
-
-The 10K RPS number is an experimental target.
-
-The repository must contain the reproducible benchmark configuration before any performance claim is made.
-
-Never claim:
-
-```text
-10K RPS
-```
-
-unless actual testing demonstrates it.
-
----
-
-# Security Benchmark
-
-The POC should measure:
-
-```text
-unauthorized actions attempted
-unauthorized actions blocked
-unauthorized actions executed
-```
-
-Target for the defined attack suite:
-
-```text
-unauthorized actions executed = 0
-```
-
-Also measure:
-
-```text
-audit coverage
-false denial rate
-authorization latency
-```
-
----
-
-# What This Project Is NOT
-
-This repository is not:
-
-* a production IAM platform
-* a complete AI security product
-* a generic LLM firewall
-* a chatbot
-* a replacement for enterprise identity systems
-* a guarantee against all prompt injection
-* a guarantee against compromised infrastructure
-
-It is a focused POC demonstrating:
-
-> Task-scoped authorization for AI-agent tool execution.
-
----
-
-# Security Limitations
-
-The POC cannot guarantee protection against:
-
-* compromised administrators
-* compromised servers
-* vulnerabilities inside tools
-* incorrectly defined policies
-* perfect user-intent interpretation
-* every possible prompt-injection technique
-* every distributed-system race condition
-
-These limitations are documented in `THREAT_MODEL.md`.
-
----
-
-# Design Principles
-
-## 1. LLMs propose, deterministic systems authorize.
-
-## 2. Default decision is DENY.
-
-## 3. Tool execution requires explicit authorization.
-
-## 4. Permissions should be as narrow and short-lived as practical.
-
-## 5. Every authorization attempt should be auditable.
-
-## 6. Security failures must fail closed.
-
-## 7. Frontend checks are never security controls.
-
-## 8. Performance claims require reproducible benchmarks.
-
-## 9. Security claims require reproducible tests.
-
-## 10. Simplicity is preferred over unnecessary infrastructure.
-
----
-
-# Project Status
-
-Current status:
-
-```text
-Specification / POC development
-```
-
-The initial milestone is:
-
-```text
-Functional task-scoped authorization
-+
-MCP/tool integration
-+
-Security test suite
-+
-Audit dashboard
-+
-Performance benchmark
-```
-
----
-
-# Week 1 Definition of Done
-
-At the end of the first development week, the project should be able to demonstrate:
-
-```text
-[ ] Register an AI agent
-[ ] Create a task
-[ ] Define task-scoped authorization
-[ ] Register tools
-[ ] Evaluate authorization deterministically
-[ ] Execute authorized tools
-[ ] Block unauthorized tools
-[ ] Enforce resource restrictions
-[ ] Enforce parameter limits
-[ ] Enforce expiration
-[ ] Enforce revocation
-[ ] Record audit events
-[ ] Test prompt-injection-driven escalation
-[ ] Test privilege escalation
-[ ] Test policy tampering
-[ ] Test fail-closed behavior
-[ ] Run end-to-end demonstration
-[ ] Run performance benchmark
-```
-
-The boxes above represent requirements, not completed implementation status. They
-should only be checked after the corresponding functionality and tests actually
-pass.
-
----
-
-# Future Direction
-
-Potential future capabilities:
-
-```text
-Agent identity
-Delegated authority
-Capability tokens
-Human approval workflows
-Risk-based authorization
-Multi-agent delegation
-Agent reputation
-External policy engines
-Distributed authorization
-Cryptographically verifiable execution
-Additional agent protocols
-```
-
-These are intentionally outside the initial POC.
-
----
-
-# Portfolio Positioning
-
-Use a precise description:
-
-> Built a task-scoped authorization gateway for AI agents that enforces least-privilege tool access, deterministic policy constraints, auditability, and security controls across MCP/API tool execution.
-
-The project should be evaluated primarily through:
-
-```text
-Architecture
-Security model
-Authorization correctness
-Adversarial testing
-MCP integration
-Performance measurements
-```
-
-Not by the number of UI screens or AI features.
-
----
-
-# Core Thesis
-
-AI agents are moving from generating information to taking actions.
-
-Once agents can:
-
-```text
-send
-modify
-purchase
-refund
-delete
-deploy
-approve
-```
-
-authorization becomes a fundamentally important control layer.
-
-Agent Action Firewall explores one narrow question:
-
-> How do we give an AI agent enough authority to complete a task without giving it more authority than the task requires?
-
-The answer implemented by this project is:
-
-```text
-Task-scoped authority
-+
-Deterministic policy enforcement
-+
-Least privilege
-+
-Tool isolation
-+
-Auditability
-+
-Adversarial testing
-```
-
-```
-```
+Storefront template adapted from [MDBootstrap's free Ecommerce Template](https://github.com/mdbootstrap/Ecommerce-Template-Bootstrap) (MIT licensed). Built by [Ajay Bandiwaddar](https://github.com/AjayBandiwaddar).
