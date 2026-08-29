@@ -48,3 +48,37 @@ def confirmed_purchase_intent(db, create_order_tool, finalize_payment_tool, mand
     confirm_purchase_intent(intent.intent_id)
     intent.refresh_from_db()
     return intent
+@pytest.fixture
+def propose_intent_tool(db):
+    return Tool.objects.get_or_create(
+        tool_id="propose_purchase_intent",
+        defaults={"name": "Propose Purchase Intent", "input_schema": {"task_id": {}, "product_id": {}, "quantity": {}}},
+    )[0]
+
+
+@pytest.fixture
+def security_demo_tools(db, create_order_tool, finalize_payment_tool, propose_intent_tool):
+    pass
+
+
+@pytest.fixture
+def agent_task_with_propose_policy(db, propose_intent_tool):
+    from apps.policies.models import Policy, PolicyEffect, ResourceScopeMode
+
+    agent = Agent.objects.create(agent_id="audit-link-agent", name="Audit Link Agent", status=AgentStatus.ACTIVE)
+    raw_token = agent.issue_token()
+    task = Task.objects.create(
+        task_id="audit-link-task", agent=agent, user_id="audit-link-user",
+        status=TaskStatus.ACTIVE, expires_at=timezone.now() + timedelta(minutes=30),
+    )
+    Policy.objects.create(
+        policy_id="policy-audit-link-propose",
+        name="Standing: propose purchase intent (audit link test)",
+        effect=PolicyEffect.ALLOW,
+        agent_scope=agent,
+        task_scope=task,
+        tool_scope=propose_intent_tool,
+        allowed_actions=["propose_purchase_intent"],
+        resource_mode=ResourceScopeMode.NONE,
+    )
+    return agent, task, raw_token

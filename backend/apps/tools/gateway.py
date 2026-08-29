@@ -13,10 +13,14 @@ no `/api/internal/tools/{tool_id}/execute/` route anywhere in urls.py.
 
 from __future__ import annotations
 
+import logging
+
 from apps.audit.models import AuditEvent
 from apps.authorization.engine import AuthorizationDecision, Decision
 from apps.tools.handlers import TOOL_HANDLERS
 from apps.tools.models import Tool, ToolExecution, ToolStatus
+
+logger = logging.getLogger(__name__)
 
 
 class ToolExecutionDenied(Exception):
@@ -62,7 +66,13 @@ def execute_tool(
     if handler is None:
         raise ToolExecutionDenied(f"Refusing to execute: no handler registered for '{tool_id}'.")
 
-    result = handler(arguments)
+    try:
+        result = handler(arguments)
+    except Exception:  # noqa: BLE001 - fail closed: a handler bug must never crash dispatch or leak raw
+        # exception content to the caller. The real exception is logged
+        # server-side only; the caller gets a stable, generic reason code.
+        logger.exception("Tool handler '%s' raised an unhandled exception.", tool_id)
+        result = {"status": "error", "reason": "TOOL_EXECUTION_ERROR"}
 
     # Opt-in convention: a handler may report the id of something it just
     # created that did not exist yet when authorize() persisted this call's

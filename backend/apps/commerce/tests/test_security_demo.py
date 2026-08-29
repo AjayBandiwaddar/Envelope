@@ -3,24 +3,7 @@ from apps.commerce.views import _run_security_scenario
 from apps.commerce.razorpay_client import get_order_create_call_count
 
 
-@pytest.fixture
-def security_demo_tools(db):
-    from apps.tools.models import Tool
-    Tool.objects.get_or_create(
-        tool_id="propose_purchase_intent",
-        defaults={"name": "Propose Purchase Intent", "input_schema": {"task_id": {}, "product_id": {}, "quantity": {}}},
-    )
-    Tool.objects.get_or_create(
-        tool_id="create_order",
-        defaults={"name": "Create Order", "input_schema": {"intent_id": {}}},
-    )
-    Tool.objects.get_or_create(
-        tool_id="finalize_payment",
-        defaults={
-            "name": "Finalize Payment",
-            "input_schema": {"intent_id": {}, "razorpay_order_id": {}, "razorpay_payment_id": {}, "razorpay_signature": {}},
-        },
-    )
+
 
 
 @pytest.mark.django_db
