@@ -85,7 +85,8 @@ if not AGENT_TOKEN:
 #   Gemini cannot create an order or finalize payment.
 #
 # STEP 3:
-#   Python has already received explicit human confirmation.
+#   Python has already received explicit human confirmation
+#   OR an active SpendingEnvelope auto-confirmed the intent.
 #   Gemini is allowed to call create_order.
 #
 # STEP 6:
@@ -129,7 +130,9 @@ Do NOT call:
 - finalize_payment
 - confirm_purchase_intent
 
-A human must explicitly confirm the purchase outside the model.
+A human must explicitly confirm the purchase outside the model, unless
+an existing SpendingEnvelope already covers it - either way, that
+decision happens outside the model, never inside it.
 
 After proposing the purchase, report:
 - product name
@@ -156,11 +159,13 @@ You are an AI buyer agent for a laptop store.
 
 You are now in the ORDER CREATION phase.
 
-The application has already received explicit human confirmation
-for the purchase intent.
+The application has already authorized the purchase intent - either
+through explicit human confirmation, or automatically through an
+existing SpendingEnvelope (delegated spending authority) that already
+covered this exact agent, merchant, and amount.
 
-The human confirmation was performed outside the model by the
-application's authorization layer.
+That authorization decision was made entirely outside the model, by
+the application's authorization layer.
 
 Every MCP tool call requires task_id.
 
@@ -176,7 +181,8 @@ Your job in this phase is:
 
 IMPORTANT:
 
-The application has already handled human authorization.
+The application has already handled authorization, by whichever path
+applied.
 
 You ARE authorized to call:
 - create_order
@@ -564,21 +570,15 @@ def find_tool_result(
 
 
 # ============================================================================
-# DJANGO AUTHORIZATION
+# DJANGO SETUP (shared)
 # ============================================================================
 
 
-def confirm_purchase_sync(
-    intent_id: str,
-) -> None:
+def _ensure_django() -> None:
     """
-    Perform the Django authorization operation.
-
-    IMPORTANT:
-
-    Gemini never receives this function as a tool.
-
-    Python calls it only after the human explicitly enters "y".
+    Idempotent Django bootstrap shared by every sync helper below.
+    Safe to call more than once per process - django.apps.apps.ready
+    guards against re-running django.setup().
     """
 
     import django
@@ -596,7 +596,31 @@ def confirm_purchase_sync(
         "config.settings.dev",
     )
 
-    django.setup()
+    from django.apps import apps as django_apps
+
+    if not django_apps.ready:
+        django.setup()
+
+
+# ============================================================================
+# DJANGO AUTHORIZATION
+# ============================================================================
+
+
+def confirm_purchase_sync(
+    intent_id: str,
+) -> None:
+    """
+    Perform the Django authorization operation.
+
+    IMPORTANT:
+
+    Gemini never receives this function as a tool.
+
+    Python calls it only after the human explicitly enters "y".
+    """
+
+    _ensure_django()
 
     from apps.commerce.authorization import (
         confirm_purchase_intent,
@@ -617,6 +641,51 @@ async def confirm_purchase(
 
     await sync_to_async(
         confirm_purchase_sync,
+        thread_sensitive=True,
+    )(intent_id)
+
+
+def try_auto_confirm_via_envelope_sync(
+    intent_id: str,
+) -> bool:
+    """
+    Attempt automatic confirmation via an existing SpendingEnvelope.
+
+    IMPORTANT:
+
+    Gemini never receives this function as a tool, and never receives
+    any tool that could create, extend, or revoke a SpendingEnvelope -
+    that authority is structurally unreachable from inside the model,
+    same as confirm_purchase_intent itself. This function only ever
+    checks whether a human/operator has ALREADY delegated bounded
+    spending authority ahead of time; it never grants any authority
+    itself.
+
+    Returns True if the intent was auto-confirmed (an active envelope
+    with matching agent+merchant+currency had enough remaining balance,
+    and confirm_purchase_intent has already run for real). Returns
+    False if nothing was touched at all - the intent stays PENDING and
+    the caller must fall back to the existing manual human-confirm gate
+    unchanged.
+    """
+
+    _ensure_django()
+
+    from apps.commerce.envelope import try_auto_confirm_via_envelope
+
+    return try_auto_confirm_via_envelope(intent_id)
+
+
+async def try_auto_confirm_via_envelope(
+    intent_id: str,
+) -> bool:
+    """
+    Async wrapper, run outside the asyncio event loop, same pattern as
+    confirm_purchase().
+    """
+
+    return await sync_to_async(
+        try_auto_confirm_via_envelope_sync,
         thread_sensitive=True,
     )(intent_id)
 
@@ -832,10 +901,68 @@ async def require_human_confirmation(
     intent_id: str,
 ) -> None:
     """
-    Human confirmation.
+    Step 2:
+      Authorize the purchase intent, either:
 
-    This is deliberately NOT performed by Gemini.
+      (a) automatically, if an active SpendingEnvelope already covers
+          this agent + merchant + currency + amount (checked FIRST,
+          before ever prompting the human), or
+
+      (b) via the existing, unchanged manual human-confirmation gate,
+          if (a) does not apply.
+
+    HARD SECURITY BOUNDARY, unchanged from before this feature existed:
+    Gemini is never given either confirm_purchase_intent or the
+    envelope auto-confirm path as a tool. Both are called only by
+    Python, never by the model - one after a human explicitly enters
+    "y", the other only after checking a pre-existing, human-created
+    SpendingEnvelope. The agent cannot expand its own authority either
+    way.
     """
+
+    print()
+    print("=" * 70)
+    print("AUTHORIZATION")
+    print("=" * 70)
+    print()
+
+    print(
+        "Checking for an existing SpendingEnvelope covering this "
+        "agent and merchant..."
+    )
+
+    auto_confirmed, reason = await try_auto_confirm_via_envelope(
+        intent_id
+    )
+
+    if auto_confirmed:
+
+        print()
+        print(
+            "Auto-confirmed via SpendingEnvelope - within a "
+            "pre-authorized spending limit, so no human confirmation "
+            "was required for this specific purchase."
+        )
+
+        return
+
+    if reason == "insufficient_balance":
+        print(
+            "The pre-authorized spending envelope has been exhausted "
+            "for this purchase amount - proceeding to manual "
+            "confirmation."
+        )
+    elif reason == "no_envelope":
+        print(
+            "No pre-authorized spending envelope covers this purchase "
+            "(none exists, expired, or wrong merchant) - proceeding "
+            "to manual confirmation."
+        )
+    else:
+        print(
+            "Envelope auto-confirmation did not apply - proceeding "
+            "to manual confirmation."
+        )
 
     print()
     print("=" * 70)
@@ -910,8 +1037,9 @@ async def create_order(
     print()
 
     prompt = (
-        "The application has already received explicit human "
-        "confirmation for the purchase.\n\n"
+        "The application has already authorized the purchase, either "
+        "through explicit human confirmation or an existing "
+        "SpendingEnvelope.\n\n"
         f"Confirmed purchase intent: {intent_id}\n\n"
         "Call create_order now.\n"
         f'Use task_id "{TASK_ID}".'
