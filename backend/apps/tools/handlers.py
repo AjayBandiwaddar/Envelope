@@ -322,6 +322,8 @@ def finalize_payment(arguments: dict) -> dict:
     except razorpay.errors.SignatureVerificationError:
         order.status = OrderStatus.FAILED
         order.save(update_fields=["status", "updated_at"])
+        from apps.commerce.envelope import release_envelope_hold
+        release_envelope_hold(intent.intent_id)  # no-op if this purchase wasn't envelope-backed
         return {"status": "error", "reason": "SIGNATURE_VERIFICATION_FAILED", "order_id": order.order_id}
 
     order.status = OrderStatus.PAID
@@ -329,6 +331,11 @@ def finalize_payment(arguments: dict) -> dict:
     order.save(update_fields=["status", "razorpay_payment_id", "updated_at"])
     intent.status = PurchaseIntentStatus.COMPLETED
     intent.save(update_fields=["status", "updated_at"])
+    from apps.commerce.envelope import capture_envelope_hold
+    try:
+        capture_envelope_hold(intent.intent_id)
+    except ValueError:
+        pass  # this purchase wasn't envelope-backed - nothing to capture
     return {
         "status": "ok",
         "order_id": order.order_id,
