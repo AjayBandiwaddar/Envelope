@@ -1,5 +1,8 @@
 from django.core.management.base import BaseCommand
-from apps.commerce.models import Product
+from apps.commerce.models import Product, Merchant
+
+REFERENCE_MERCHANT_ID = "reference-merchant"
+REFERENCE_MERCHANT_NAME = "Reference Storefront"
 
 DEFAULT_PRODUCTS = [
     {"product_id": "laptop-apex-16", "name": "Apex 16", "category": "laptops",
@@ -21,11 +24,15 @@ class Command(BaseCommand):
     help = "Register the reference merchant's catalog (six laptops)."
 
     def handle(self, *args, **options):
+        merchant, _ = Merchant.objects.get_or_create(
+            merchant_id=REFERENCE_MERCHANT_ID,
+            defaults={"name": REFERENCE_MERCHANT_NAME},
+        )
         created_count = 0
         for entry in DEFAULT_PRODUCTS:
             _, created = Product.objects.get_or_create(
                 product_id=entry["product_id"],
-                defaults={k: v for k, v in entry.items() if k != "product_id"},
+                defaults={**{k: v for k, v in entry.items() if k != "product_id"}, "merchant": merchant},
             )
             if created:
                 created_count += 1
