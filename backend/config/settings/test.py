@@ -22,12 +22,24 @@ this is purely a test-infrastructure choice.
 
 from .base import *  # noqa: F401,F403
 
+from django.db.backends.signals import connection_created
+
+def _enable_sqlite_wal(sender, connection, **kwargs):
+    if connection.vendor == "sqlite":
+        with connection.cursor() as cursor:
+            cursor.execute("PRAGMA journal_mode=WAL;")
+            cursor.execute("PRAGMA busy_timeout=20000;")
+
+connection_created.connect(_enable_sqlite_wal)
+
 DEBUG = False
 
 DATABASES = {
     "default": {
         "ENGINE": "django.db.backends.sqlite3",
         "NAME": BASE_DIR / "test_db.sqlite3",  # noqa: F405 - BASE_DIR comes from `from .base import *`
+        "OPTIONS": {"timeout": 20}
+        
     }
 }
 

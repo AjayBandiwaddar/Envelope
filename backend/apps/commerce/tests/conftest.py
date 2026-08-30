@@ -1,4 +1,5 @@
 import pytest
+from apps.commerce.models import Merchant
 from django.utils import timezone
 from datetime import timedelta
 from apps.agents.models import Agent, AgentStatus
@@ -82,3 +83,22 @@ def agent_task_with_propose_policy(db, propose_intent_tool):
         resource_mode=ResourceScopeMode.NONE,
     )
     return agent, task, raw_token
+
+from apps.commerce.models import Merchant
+
+@pytest.fixture
+def reference_merchant(db):
+    return Merchant.objects.get_or_create(
+        merchant_id="reference-merchant", defaults={"name": "Reference Storefront"},
+    )[0]
+
+@pytest.fixture
+def second_merchant(db):
+    return Merchant.objects.create(merchant_id="second-merchant", name="Second Merchant (test-only)")
+
+@pytest.fixture
+def mandate_test_product(db, reference_merchant):
+    return Product.objects.create(
+        product_id="test-laptop", name="Test Laptop", category="laptops",
+        price_minor=5799900, currency="INR", merchant=reference_merchant,
+    )
