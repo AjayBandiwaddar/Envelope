@@ -3,6 +3,7 @@ from django.http import HttpResponse, Http404, JsonResponse
 from django.shortcuts import render, get_object_or_404, redirect
 from django.conf import settings
 from django.views.decorators.csrf import csrf_exempt
+from django.utils import timezone
 from apps.commerce.models import Order, Product
 from apps.tools.mcp_dispatch import dispatch_tool_call
 from apps.commerce.authorization import confirm_purchase_intent
