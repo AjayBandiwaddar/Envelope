@@ -21,6 +21,13 @@ from mcp.client.stdio import stdio_client
 # CONFIG
 # ============================================================================
 
+GEMINI_CALL_SPACING_SECONDS = int(os.getenv("GEMINI_CALL_SPACING_SECONDS", "15"))
+
+async def _rate_limit_pause(reason: str) -> None:
+    print()
+    print(f"Pausing {GEMINI_CALL_SPACING_SECONDS}s before next Gemini call ({reason}) - free-tier rate limit spacing...")
+    await asyncio.sleep(GEMINI_CALL_SPACING_SECONDS)
+
 ROOT = Path(__file__).resolve().parent.parent
 BACKEND = ROOT / "backend"
 MANAGE_PY = BACKEND / "manage.py"
@@ -645,6 +652,24 @@ async def confirm_purchase(
     )(intent_id)
 
 
+def abandon_intent_sync(intent_id: str) -> None:
+    _ensure_django()
+    from apps.commerce.models import PurchaseIntent, PurchaseIntentStatus
+    PurchaseIntent.objects.filter(intent_id=intent_id).update(status=PurchaseIntentStatus.ABANDONED)
+
+
+async def abandon_intent(intent_id: str) -> None:
+    await sync_to_async(abandon_intent_sync, thread_sensitive=True)(intent_id)
+
+def abandon_intent_sync(intent_id: str) -> None:
+    _ensure_django()
+    from apps.commerce.models import PurchaseIntent, PurchaseIntentStatus
+    PurchaseIntent.objects.filter(intent_id=intent_id).update(status=PurchaseIntentStatus.ABANDONED)
+
+
+async def abandon_intent(intent_id: str) -> None:
+    await sync_to_async(abandon_intent_sync, thread_sensitive=True)(intent_id)
+
 def try_auto_confirm_via_envelope_sync(
     intent_id: str,
 ) -> bool:
@@ -837,64 +862,75 @@ async def find_product_and_propose_intent(
     client: genai.Client,
     session: ClientSession,
     user_request: str,
-) -> str:
+    excluded_product_ids: list[str] | None = None,
+) -> tuple[str, str, str]:
     """
-    Step 1:
-      User request
-        -> Gemini
-        -> list_products
-        -> propose_purchase_intent
-        -> intent_id
+    Returns (intent_id, product_id, product_name).
     """
-
     print()
     print("=" * 70)
     print("STEP 1: FINDING PRODUCT")
     print("=" * 70)
     print()
 
-    response = await ask_gemini(
-        client,
-        session,
-        user_request,
-        STEP1_SYSTEM_INSTRUCTION,
-    )
-
-    print_agent_response(
-        response
-    )
-
-    proposal = find_tool_result(
-        response,
-        "propose_purchase_intent",
-    )
-
-    proposal = require_success(
-        proposal,
-        "propose_purchase_intent",
-    )
-
-    intent_id = proposal.get(
-        "intent_id"
-    )
-
-    if not intent_id:
-        raise RuntimeError(
-            "Purchase proposal succeeded "
-            "but returned no intent_id.\n"
-            f"Result: {proposal}"
+    prompt = user_request
+    if excluded_product_ids:
+        prompt += (
+            f"\n\nDo NOT propose these product_ids again, the human already "
+            f"rejected them: {', '.join(excluded_product_ids)}. Pick the next "
+            f"best genuinely different match from the catalog."
         )
 
-    print(
-        f"Purchase intent: {intent_id}"
-    )
+    await _rate_limit_pause("Step 1: finding product")
+    response = await ask_gemini(client, session, prompt, STEP1_SYSTEM_INSTRUCTION)
 
-    return intent_id
+    proposal = find_tool_result(response, "propose_purchase_intent")
+    proposal = require_success(proposal, "propose_purchase_intent")
+
+    intent_id = proposal.get("intent_id")
+    product_id = proposal.get("product_id", "")
+    if not intent_id:
+        raise RuntimeError(f"Purchase proposal succeeded but returned no intent_id.\nResult: {proposal}")
+
+    product_name = proposal.get("product_name", "the proposed product")
+    print(f"Purchase intent: {intent_id} ({product_id})")
+
+    return intent_id, product_id, product_name
+
+
+# ============================================================================
+# PRODUCT FIT CHECK (before Step 2)
+# ============================================================================
+
+
+async def require_product_fit_confirmation(intent_id: str, product_name: str) -> bool:
+    """
+    Distinct from require_human_confirmation - this asks "is this the
+    right product", not "may I spend money". A 'no' here abandons the
+    intent and lets the caller retry the search; it never touches
+    authorization or payment.
+    """
+    print()
+    print("=" * 70)
+    print("PRODUCT FIT CHECK")
+    print("=" * 70)
+    print()
+
+    answer = input(f"Agent suggests: {product_name}. Is this what you wanted? [y/n]: ").strip().lower()
+
+    if answer == "y":
+        return True
+
+    print()
+    print("Not a fit - abandoning this proposal and searching again.")
+    await abandon_intent(intent_id)
+    return False
 
 
 # ============================================================================
 # STEP 2
 # ============================================================================
+
 
 
 async def require_human_confirmation(
@@ -1045,11 +1081,9 @@ async def create_order(
         f'Use task_id "{TASK_ID}".'
     )
 
+    await _rate_limit_pause("Step 3: creating order")
     response = await ask_gemini(
-        client,
-        session,
-        prompt,
-        CREATE_ORDER_SYSTEM_INSTRUCTION,
+        client, session, prompt, CREATE_ORDER_SYSTEM_INSTRUCTION,
     )
 
     print_agent_response(
@@ -1207,11 +1241,9 @@ async def finalize_payment(
         "Call finalize_payment now using exactly these values."
     )
 
+    await _rate_limit_pause("Step 6: finalizing payment")
     response = await ask_gemini(
-        client,
-        session,
-        prompt,
-        FINALIZE_PAYMENT_SYSTEM_INSTRUCTION,
+        client, session, prompt, FINALIZE_PAYMENT_SYSTEM_INSTRUCTION,
     )
 
     print_agent_response(
@@ -1297,13 +1329,30 @@ async def run(
                 # STEP 1
                 # ============================================================
 
-                intent_id = (
-                    await find_product_and_propose_intent(
-                        client,
-                        session,
-                        user_request,
+                excluded_product_ids: list[str] = []
+                intent_id = None
+                attempts = 0
+                MAX_FIT_ATTEMPTS = 4
+
+                while intent_id is None:
+                    attempts += 1
+                    if attempts > MAX_FIT_ATTEMPTS:
+                        print()
+                        print(f"No fit found after {MAX_FIT_ATTEMPTS} attempts. Stopping.")
+                        raise SystemExit(0)
+
+                    candidate_intent_id, candidate_product_id, product_name = (
+                        await find_product_and_propose_intent(
+                            client, session, user_request, excluded_product_ids,
+                        )
                     )
-                )
+
+                    fits = await require_product_fit_confirmation(candidate_intent_id, product_name)
+
+                    if fits:
+                        intent_id = candidate_intent_id
+                    else:
+                        excluded_product_ids.append(candidate_product_id)
 
                 # ============================================================
                 # STEP 2
@@ -1437,3 +1486,4 @@ if __name__ == "__main__":
     asyncio.run(
         run(request)
     )
+    
