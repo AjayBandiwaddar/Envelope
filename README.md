@@ -1,8 +1,11 @@
-# Reference Merchant — Agentic Commerce with a Cryptographically Bound Firewall
+# Reference Merchant — Agentic Commerce with Cryptographic, Bounded Authorization
 
 **Razorpay AI Buildathon 2026 — Track 1: AI Growth & Agentic Commerce**
 
-> An AI agent can genuinely shop and pay a real merchant, end to end — but it can never authorize its own spending. Every money-relevant step is checked by a deterministic authorization firewall, backed by a cryptographically signed proof of exactly what was approved, with every decision — allowed or denied — permanently recorded.
+> AI decides what it wants to buy. The merchant determines what is actually true and available. The authorization system determines what the agent is allowed to do. Razorpay determines the payment outcome. The system records the proof.
+
+A live, working demonstration of an AI buyer agent purchasing real goods through a real Razorpay test-mode integration — with every action explainable, bounded, and gated, and every decision independently auditable.
+
 
 ![Architecture diagram](architecture.svg)
 
@@ -10,13 +13,13 @@
 
 ## Table of Contents
 
-- [The Problem](#the-problem)
-- [Our Interpretation](#our-interpretation)
-- [What's Built — Three Systems](#whats-built--three-systems)
-- [The Purchase Flow](#the-purchase-flow)
+- [Problem & Interpretation](#problem--interpretation)
+- [System Overview](#system-overview)
+- [Purchase Flow](#purchase-flow)
+- [Delegated Authorization: SpendingEnvelope](#delegated-authorization-spendingenvelope)
 - [Security Guarantees](#security-guarantees)
-- [Live Failure Demonstrations](#live-failure-demonstrations)
-- [What We Explicitly Do Not Claim](#what-we-explicitly-do-not-claim)
+- [Live Interfaces](#live-interfaces)
+- [What We Don't Claim](#what-we-dont-claim)
 - [Known Limitations](#known-limitations)
 - [Tech Stack](#tech-stack)
 - [Running It Locally](#running-it-locally)
@@ -26,115 +29,171 @@
 
 ---
 
-## The Problem
+## Problem & Interpretation
 
-Razorpay's Track 1 asks for one of two things:
+Track 1 asks for AI Growth & Agentic Commerce, with a stated bar: *"every money action explainable, bounded and gated. Show the audit trail and one failure handled gracefully."*
 
-> *"Build an agent that grows revenue for a merchant on Razorpay test-mode APIs, **or** that makes a merchant transactable by an AI buyer end to end."*
+We chose to build **a merchant transactable by an AI buyer, end-to-end** — rather than a merchant-growth agent — because the harder and more track-relevant problem is proving an autonomous agent can be trusted with real payment authority at all, not just that it can recommend products.
 
-with one non-negotiable bar, regardless of which path you pick:
+## System Overview
 
-> *"Every money action explainable, bounded and gated. Show the audit trail and one failure handled gracefully."*
+| System | What it is |
+|---|---|
+| **1. Agent Action Firewall** | A deterministic, pre-existing ALLOW/DENY policy engine, extended with a cryptographic Purchase Mandate and a delegated-authority SpendingEnvelope layer |
+| **2. Reference Merchant** | A real storefront with schema.org machine-readable product data and MCP tools for catalog discovery |
+| **3. AI Buyer Agent** | A real Gemini-powered agent using a real MCP client, with a hard, non-bypassable human-confirmation gate and automated payment handoff |
 
-The track's own "why now" cites NPCI's UAP and the live protocol race between AP2, ACP, and x402 — 2026 is the year every major platform is racing to define how AI agents should be allowed to spend money on a human's behalf. Razorpay itself already piloted exactly this with NPCI and Claude in February 2026, letting AI agents place UPI orders on Zomato, Swiggy, and Zepto under spending limits.
+## Purchase Flow
 
-## Our Interpretation
+```
+Search catalog (MCP: list_products)
+  → Propose purchase intent (server-derived canonical price, never agent-supplied)
+  → Product-fit confirmation (human may reject and force a new search)
+  → Authorization (see below — envelope auto-confirm, or manual gate)
+  → Cryptographic Purchase Mandate signed (Ed25519)
+  → create_order (real Razorpay test-mode order)
+  → Checkout (human payment — Razorpay requires this; not automatable even in test mode)
+  → finalize_payment (verifies Razorpay signature, idempotent)
+  → Live audit trail (re-verifies the mandate on every page load)
+```
 
-We picked the harder path: **make a merchant transactable by an AI buyer, end to end** — not an upsell chatbot. This project is built on a pre-existing, independently developed project of ours, the **Agent Action Firewall**: a deterministic authorization gateway whose core principle — *"the AI agent may propose an action, but a deterministic authorization layer decides whether that exact action is permitted"* — is close to a direct match for the track's bar. We disclose this openly rather than presenting it as built from scratch (see [Repository History](#repository-history)): reusing tested, hardened infrastructure and spending the buildathon's time on the genuinely new parts — commerce logic, an AI buyer, and a cryptographic proof layer — is a deliberate engineering choice, not a shortcut.
+## Delegated Authorization: SpendingEnvelope
 
-## What's Built — Three Systems
+Modeled on NPCI's real **UPI Reserve Pay** / Single Block Multiple Debits policy (block funds once, up to ₹10,000, valid 90 days, one block per merchant — real published rules). Our version is additive to, never a replacement for, the manual confirmation gate:
 
-| | System | What it does |
-|---|---|---|
-| 1 | **Agent Action Firewall** | Extended for commerce. Decides ALLOW/DENY for every action an agent proposes, with zero implicit-allow paths, and signs a cryptographic **Purchase Mandate** — a simplified, honest analogue of [AP2](https://github.com/google-agentic-commerce/AP2)'s Cart Mandate — at the moment a human confirms a purchase. |
-| 2 | **Reference Merchant** | A real storefront (six laptops, real prices) exposing a genuine **MCP server** for agent discovery/purchase, plus `schema.org` structured data on every product page — a recognized vocabulary any commerce-literate agent could parse, not a bespoke API only our own agent understands. |
-| 3 | **AI Buyer Agent** | `agent/buyer.py` — a real **MCP client** using Google Gemini (free tier) to parse a natural-language request, browse the real catalog, and drive the purchase. It can propose a purchase; it structurally **cannot** confirm one. |
-
-## The Purchase Flow
-
-1. **`propose_purchase_intent`** — the agent names a product and quantity. Price is looked up from the live database *right now* — never accepted from the agent.
-2. **Human confirmation** — a hard stop, outside the agent's reach. `confirm_purchase_intent` is not an MCP tool; there is no callable action for the agent to authorize its own purchase with.
-3. **`confirm_purchase_intent`** — writes the authorization `Policy` **and** signs the cryptographic `Mandate` for this exact transaction (product, quantity, amount, currency, expiry, nonce).
-4. **`create_order`** — accepts only an `intent_id`. No amount or currency parameter exists to spoof. Firewall checks the Policy *and* the Mandate; only then is a real Razorpay test-mode order created — atomically, so two concurrent attempts can never create two orders or make two provider calls.
-5. **Checkout** — a human completes payment via Razorpay Checkout. This is not a workaround: Razorpay requires a human-present payment step even in test mode, and we treat that as a second, independent consent layer rather than a limitation.
-6. **`finalize_payment`** — independently verifies Razorpay's payment signature (idempotent — safe to call twice) and marks the order `PAID`.
-7. **Audit trail** — every step above, ALLOW or DENY, is permanently recorded and viewable live at `/checkout/<intent_id>/audit/`, including a **live re-verification of the mandate signature on every page load** — not a cached status.
+- **Scope:** one envelope per agent + merchant (a real `Merchant` foreign-key relationship — not a hardcoded string — proven with a cross-merchant denial test).
+- **Auto-confirm:** if an active, unexpired envelope has enough remaining balance for a proposed purchase, the system authorizes it automatically — no human click. If not, it falls back cleanly to the existing manual gate, with an explicit reason (no coverage vs. exhausted balance).
+- **Concurrency safety:** the balance check-and-decrement is a single atomic conditional `UPDATE` (`WHERE remaining_amount_minor >= amount`), not a Python read-then-write — the same class of fix as `create_order`'s own concurrency hardening. Proven with a real multithreaded test (two real OS threads racing for a balance that can only cover one).
+- **Hold → capture → release lifecycle:** auto-confirming a purchase places a `HELD` debit against the envelope. A successful payment **captures** the hold (permanent, no balance change). A failed payment (signature verification failure) **releases** it, atomically crediting the balance back — idempotent, so a double-release can never over-credit. This closes a real gap we found ourselves during testing: without it, an abandoned or failed checkout after auto-confirmation would permanently consume envelope balance for a purchase that never completed.
+- **Structurally unreachable by the agent:** creating, extending, or revoking an envelope is never an MCP tool — verified by a test asserting no envelope-related tool exists in the registry, and that the firewall would deny it even if one were added without a matching policy.
+- **Novelty over the real UPI Reserve Pay:** NPCI's block is centrally trusted and opaque; ours is independently, cryptographically verifiable via the same mandate pattern used for individual purchases.
 
 ## Security Guarantees
 
-- No implicit `ALLOW` anywhere in the policy engine — every path either matches an explicit rule or denies.
-- Unknown parameters are always rejected outright, never silently ignored.
-- The agent's credential never appears in any tool's callable schema.
-- Confused-deputy protection: a task belonging to another agent is indistinguishable from one that doesn't exist.
-- Prices are always server-derived; `create_order` has no amount/currency field to spoof at all.
-- The cryptographic mandate is checked against **live database state**, not just its own signature — a validly signed mandate that no longer matches reality is rejected.
-- Duplicate/concurrent order creation is prevented by a real database uniqueness constraint (portable across Postgres and SQLite) — proven with a genuine multithreaded concurrency test, not a mock.
-- `finalize_payment` is idempotent; a handler exception anywhere is caught and never crashes the pipeline or leaks internal detail.
-- Audit persistence is fail-closed: if the audit record can't be saved, the decision is downgraded to `DENY`.
+Live at [`/security-demo/`](http://127.0.0.1:8000/security-demo/) — four real attacks run through the actual authorization dispatch path, a fresh disposable agent/task/purchase created per run, nothing scripted:
 
-## Live Failure Demonstrations
+1. **Skip Confirmation** — attempt `create_order` with no human confirmation → `DENY` / `POLICY_NOT_FOUND`.
+2. **Unknown Parameter** — inject an undeclared parameter → `DENY` / `UNKNOWN_PARAMETER`.
+3. **Tampered Mandate** — confirm normally, then edit the stored mandate payload directly in the database → Policy layer still says `ALLOW` (its scope genuinely matches), but the independent cryptographic mandate check inside `create_order` blocks it anyway → `MANDATE_VERIFICATION_FAILED`. Two independent layers; either one stops the attack.
+4. **Tampered Amount Parameter** — attempt `create_order` with a forged `amount`/`currency` smuggled into the call → `DENY` / `UNKNOWN_PARAMETER`, proving the historical fix (amount is now server-derived only, never agent-supplied) is closed at the firewall layer, not just the handler layer.
 
-Available at **`/security-demo/`** — three real attacks, run through the actual code path with fresh disposable data every time, backed by a real invocation counter proving zero Razorpay calls on every denial:
+Every scenario reports a **real, counted Razorpay invocation total** — proven zero on every denial, not inferred from an empty database.
 
-| Attack | Result |
+Also live: [`/concurrency-demo/`](http://127.0.0.1:8000/concurrency-demo/) — fires three real concurrent purchase attempts against one envelope with balance for exactly one, live in the browser, and shows the database's atomic guarantee resolve the race in real time.
+
+## Live Interfaces
+
+| URL | What it shows |
 |---|---|
-| Skip human confirmation, then `create_order` | `DENY — POLICY_NOT_FOUND` |
-| `create_order` with an undeclared extra field | `DENY — UNKNOWN_PARAMETER` |
-| Tamper a signed mandate's amount, then `create_order` | Policy layer says `ALLOW` — the independent mandate check blocks it anyway |
+| `/` | Storefront catalog |
+| `/agent-console/` | **Type a prompt, watch the full agent pipeline run live** — search, propose, product-fit check, authorization (auto or manual), order, checkout, and audit — as a real-time staged pipeline, not a chat log |
+| `/security-demo/` | Four live attacks against the real authorization path |
+| `/concurrency-demo/` | The envelope's atomic concurrency guarantee, proven live |
+| `/checkout/<order_id>/` | Real Razorpay test-mode checkout |
+| `/checkout/<intent_id>/audit/` | Live decision timeline + live mandate re-verification |
 
-The third one is the centerpiece: two independent layers, either of which alone stops the attack. A standalone, rerunnable version also lives at `scripts/demo_tampered_mandate.py`.
+## What We Don't Claim
 
-## What We Explicitly Do Not Claim
-
-- **Not AP2-conformant.** We sign one server-side payload per transaction; real AP2 chains three W3C Verifiable-Credential mandates signed by the user's own wallet.
-- **No x402.** It's a stablecoin/crypto micropayment rail — doesn't fit an INR/Razorpay context, so we didn't bolt it on for coverage.
-- **No UCP implementation.** We researched Google/Shopify's Universal Commerce Protocol in depth and deliberately skipped even its lightweight discovery profile — our MCP server only runs over local stdio, and publishing a discovery document pointing at a non-network-reachable service would itself be a false claim.
-- **No nonce-based replay ledger.** The signed nonce exists for structural fidelity to the AP2 pattern; replay is actually prevented via the database's strict one-to-one `Order`↔`PurchaseIntent` relationship.
+- **Not full AP2 conformance.** The cryptographic mandate is a simplified, single-keypair Ed25519 analogue of AP2's Cart Mandate pattern — not the full W3C Verifiable Credential chain.
+- **Not UCP.** Researched in depth (real spec, Jan 2026, Google+Shopify+retailers standard); deliberately not implemented, because our MCP server is stdio-only with no public network endpoint — declaring any transport in a UCP discovery profile would itself be a false claim.
+- **Not "better than Razorpay's own Reserve Pay."** We don't know their production system's internals. The honest, specific claim: our authorization artifact is independently, cryptographically verifiable, rather than resting on a centrally-trusted bank ledger entry.
+- **No tokenized/recurring payment instruments.** SpendingEnvelope pre-authorizes spending amount and scope, not a specific payment instrument — every purchase still requires a real human checkout interaction, because that's a genuine Razorpay/regulatory boundary, not an oversight.
 
 ## Known Limitations
 
-- MCP server is stdio-only, not publicly network-reachable.
-- Single hardcoded merchant, six-SKU catalog, no multi-merchant support.
-- No fulfillment/shipping concept — `Order` status stops at `PAID`/`FAILED`.
-- The Razorpay-invocation counter used in the live security demo is disclosed, process-local, in-memory instrumentation — resets on restart, not a production metric.
-- A narrow, documented distributed-transaction gap: a crash between Razorpay confirming an order and that ID being saved locally could theoretically orphan a provider-side order. Judged, based on testing, as not warranting full outbox/reconciliation infrastructure for this proof of concept.
-- Automated tests run against SQLite; local development runs against PostgreSQL — deliberate (the concurrency fix uses a uniqueness constraint portable to both, not a Postgres-only lock), not an oversight.
+- **Distributed-transaction gap (accepted, not fixed):** if the process crashes between Razorpay confirming an order and the local `razorpay_order_id` being saved, an orphaned Razorpay-side order could exist with no local record. No outbox/reconciliation system built — judged unnecessary for this POC.
+- **Envelope hold release is not universal:** a successful payment captures the hold; a signature-verification failure releases it. Other `finalize_payment` error branches (e.g. `ORDER_NOT_FOUND`, `MANDATE_VERIFICATION_FAILED` at finalize time) do not currently release the hold, nor does a checkout silently abandoned with no callback at all. This mirrors `create_order`'s own accepted orphan-order gap in shape and severity.
+- **No public mandate-verification endpoint** — deliberately deprioritized.
+- **No growth-agent feature** was built as a separate artifact for Track 1's other allowed interpretation; the buyer's product-fit reasoning is the closest analogue.
 
 ## Tech Stack
 
-Python · Django · PostgreSQL (dev) / SQLite (tests) · Redis · [Model Context Protocol](https://modelcontextprotocol.io) (real server *and* real client) · Ed25519 (`cryptography`) · Razorpay Test Mode · Google Gemini (`gemini-3.5-flash`, free tier) · Bootstrap/MDBootstrap (MIT-licensed template) · `schema.org` · pytest (125+ tests, including real multithreaded concurrency tests)
+- **Backend:** Django 5.2, SQLite (dev), pytest
+- **Cryptography:** Ed25519 via the Python `cryptography` library
+- **AI:** Google Gemini (`gemini-3.6-flash`) via Google AI Studio free tier, `google-genai` SDK with native MCP tool support
+- **Payments:** Razorpay test-mode API
+- **Frontend:** MDBootstrap storefront template (MIT licensed), vanilla JS for the Agent Console / Concurrency Demo pipelines (no framework — deliberately dependency-light for a hackathon timeline)
 
 ## Running It Locally
 
 ```bash
-# Backend
-cd backend
-python manage.py migrate
-python manage.py seed_tools
-python manage.py seed_products
-python manage.py generate_mandate_keys   # copy printed keys into .env
-python manage.py seed_demo_agent         # copy printed token into .env
-python manage.py runserver
+# 1. Clone and set up the virtual environment
+git clone https://github.com/AjayBandiwaddar/razorpaybuildathon.git
+cd razorpaybuildathon
+python -m venv venv
+venv\Scripts\activate        # Windows
+source venv/bin/activate     # macOS/Linux
+pip install -r backend/requirements.txt
 
-# AI buyer agent (separate terminal)
-python agent/buyer.py "Find me the best laptop under 60000 rupees with at least 16GB RAM"
+# 2. Configure environment
+# Copy .env.example to .env and fill in:
+#   GEMINI_API_KEY, RAZORPAY_KEY_ID, RAZORPAY_KEY_SECRET, MANDATE_KEY_ID
+
+cd backend
+python manage.py generate_mandate_keys     # writes MANDATE_PRIVATE_KEY/PUBLIC_KEY/KEY_ID to .env
+python manage.py migrate
+
+# 3. Seed reference data
+python manage.py seed_tools                # registers MCP tool definitions (self-healing — safe to rerun anytime)
+python manage.py seed_products             # seeds the reference merchant + 6-product catalog
+python manage.py seed_demo_agent           # creates the demo buyer agent + task
+#   ⚠ This prints a fresh DEMO_AGENT_TOKEN every run — copy it into .env each time you rerun it.
+
+# 4. Create a SpendingEnvelope for the demo agent (optional — manual confirmation works without one)
+python manage.py create_envelope --agent-id demo-buyer-agent --merchant-id reference-merchant --max-amount-minor 6000000
+
+# 5. Run the server
+python manage.py runserver --noreload
+#   ⚠ --noreload matters for /agent-console/ and /concurrency-demo/, which hold
+#     in-memory run state that would split across two processes under the
+#     autoreloader.
+
+# 6. Try it
+#   Storefront:         http://127.0.0.1:8000/
+#   Agent Console:       http://127.0.0.1:8000/agent-console/
+#   Security Demo:       http://127.0.0.1:8000/security-demo/
+#   Concurrency Demo:    http://127.0.0.1:8000/concurrency-demo/
+
+# Or drive the original CLI buyer agent directly:
+cd ..
+python agent/buyer.py "find me the best laptop under 60000 rupees with at least 16gb ram"
 ```
 
-Requires a `.env` at the repo root with `RAZORPAY_KEY_ID`, `RAZORPAY_KEY_SECRET`, `GEMINI_API_KEY`, `MANDATE_PRIVATE_KEY`, `MANDATE_PUBLIC_KEY`, `DEMO_AGENT_TOKEN` (all generated/printed by the commands above).
+**Resetting demo state between takes/runs:**
+```bash
+python manage.py reset_demo_data --include-audit
+```
+Clears per-run purchase history (intents, orders, mandates, envelope debits, gated policies) and restores envelope balances to full — leaves the catalog, merchants, agents, and standing policies untouched.
+
+**Free-tier Gemini rate limits:** the buyer agent spaces Gemini calls ~15s apart by default (`GEMINI_CALL_SPACING_SECONDS` in `.env`) to stay under the free tier's 5 requests/minute cap. Lower it if you've enabled billing.
 
 ## Test Suite
 
-```bash
-cd backend
-pytest
-```
+144 tests, all passing, run via `pytest` from `backend/`. Coverage includes:
 
-125+ tests: the core policy engine, adversarial/security tests (unknown parameters, prompt-injection resistance, confused-deputy protection, real MCP-protocol integration), purchase-mandate signing/tampering/wrong-intent tests, audit-linkage correctness, all three live failure scenarios, and hardening tests including a genuine two-thread concurrency race proven against a real database.
+- Full commerce flow (propose → confirm → order → payment) happy path and every documented denial path
+- **Real concurrency tests** using `threading.Barrier` + real OS threads + `transaction=True` — for both `create_order` (proving exactly one of two simultaneous requests creates an order and calls the provider) and `SpendingEnvelope` (proving a balance covering only one of two simultaneous purchases is never overdrawn)
+- Cross-merchant envelope denial (real second `Merchant` seeded only in tests)
+- Envelope hold/capture/release lifecycle, including idempotent release and rejected double-capture
+- Handler exception-safety (no internal error text leaks to the caller), quantity validation (explicitly excluding `bool`, a Python `int` subclass), and `finalize_payment` idempotency
+- The three original security-demo scenarios plus the tampered-amount-parameter scenario, each asserting zero real provider calls on denial
 
 ## Repository History
 
-This repository was created by cloning our pre-existing [`agent-action-firewall`](https://github.com/AjayBandiwaddar/ai-firewall) project with its **full, real, dated commit history intact** — not copied and re-committed to fabricate the appearance of hackathon-period work. A single marker commit, `--- Buildathon work begins here (Track 1: AI Growth & Agentic Commerce) ---`, separates pre-existing work from buildathon work in the log itself. Three annotated tags mark each system's completion: `system-1-firewall`, `system-2-merchant`, `system-3-buyer-agent`.
+This repository was created by cloning a pre-existing, independent project of mine (`agent-action-firewall`) with its **full real commit history intact** — not a fresh copy with fabricated history. A marker commit, `--- Buildathon work begins here (Track 1: AI Growth & Agentic Commerce) ---`, separates pre-existing work from buildathon work in the log. Annotated tags mark major milestones: `system-1-firewall`, `system-2-merchant`, `system-3-buyer-agent`.
+
+We disclose this openly as a strength, not a limitation: it let buildathon time go entirely into the new, hard parts — cryptographic mandates, delegated authorization, and the live demo surfaces — rather than re-building tested infrastructure from scratch.
 
 ## Credits
 
-Storefront template adapted from [MDBootstrap's free Ecommerce Template](https://github.com/mdbootstrap/Ecommerce-Template-Bootstrap) (MIT licensed). Built by [Ajay Bandiwaddar](https://github.com/AjayBandiwaddar).
+- Storefront template: [MDBootstrap Ecommerce Template](https://github.com/mdbootstrap/Ecommerce-Template-Bootstrap) (MIT licensed)
+- Payments: [Razorpay](https://razorpay.com) test-mode API
+- AI: [Google Gemini](https://ai.google.dev) via Google AI Studio
+
+## License
+
+MIT — see [LICENSE](LICENSE).
+
+---
+
+*Built solo (Ajay + Claude as technical co-architect) for the Razorpay AI Buildathon 2026.*
