@@ -295,3 +295,23 @@ def _run_security_scenario(scenario: str) -> dict:
         "result": response.get("result"),
         "razorpay_calls_made": after_count - before_count,
     }
+
+def concurrency_demo_view(request):
+    return render(request, "commerce/concurrency_demo.html", {})
+
+
+@csrf_exempt
+def start_concurrency_race_view(request):
+    if request.method != "POST":
+        return HttpResponse("Method not allowed", status=405)
+    from apps.commerce.concurrency_demo import start_race
+    race_id = start_race()
+    return JsonResponse({"race_id": race_id})
+
+
+def concurrency_race_status_view(request, race_id):
+    from apps.commerce.concurrency_demo import get_race_status
+    status = get_race_status(race_id)
+    if status is None:
+        return JsonResponse({"error": "not found"}, status=404)
+    return JsonResponse(status)

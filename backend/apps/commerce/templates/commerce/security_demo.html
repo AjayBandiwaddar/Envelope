@@ -24,6 +24,11 @@
         Each button below runs a real attack against the live authorization path -
         a fresh, disposable agent/task/purchase is created for every run. Nothing here is scripted or faked.
       </p>
+      <div class="mb-4">
+        <a href="{% url 'concurrency-demo' %}" class="btn btn-outline-info">
+          <i class="fas fa-bolt"></i> Watch the Concurrency Guarantee Live
+        </a>
+      </div>
 
       <form method="post" class="mb-4">
         {% csrf_token %}
