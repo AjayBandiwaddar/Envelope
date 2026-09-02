@@ -1,0 +1,99 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <title>Agent Console - Reference Merchant</title>
+  <style>
+    body { font-family: sans-serif; max-width: 720px; margin: 50px auto; }
+    #prompt-box { width: 100%; padding: 12px; font-size: 16px; box-sizing: border-box; }
+    #start-btn { padding: 10px 20px; font-size: 15px; margin-top: 10px; }
+    .stage-row { padding: 12px 16px; margin: 6px 0; border-radius: 6px; border: 2px solid #ddd; color: #444; }
+    .stage-row.active { border-color: #2563eb; background: #eff6ff; font-weight: bold; }
+    .stage-row.error { border-color: #dc2626; background: #fef2f2; color: #991b1b; }
+    .stage-row.complete { border-color: #16a34a; background: #f0fdf4; color: #166534; }
+    .decision-btns { margin-top: 10px; }
+    .decision-btns button { padding: 8px 16px; margin-right: 8px; }
+    a.action-link { display: inline-block; margin-top: 10px; padding: 8px 16px; background: #2563eb; color: white; text-decoration: none; border-radius: 4px; }
+  </style>
+</head>
+<body>
+  <h1>Agent Console</h1>
+  <p>Tell the agent what you're looking for. Every step below is a real, gated action - not a simulation.</p>
+
+  <input id="prompt-box" type="text" placeholder="e.g. find me the best laptop under 60000 rupees with at least 16gb ram" value="find me the best laptop under 60000 rupees with at least 16gb ram">
+  <br>
+  <button id="start-btn">Start</button>
+
+  <div id="pipeline" style="margin-top: 24px;"></div>
+
+  <script>
+    let currentRunId = null;
+    let pollTimer = null;
+
+    document.getElementById('start-btn').onclick = async function () {
+      const prompt = document.getElementById('prompt-box').value.trim();
+      if (!prompt) return;
+      this.disabled = true;
+      document.getElementById('pipeline').innerHTML = '';
+
+      const resp = await fetch('/agent-console/start/', {
+        method: 'POST', headers: {'Content-Type': 'application/json'},
+        body: JSON.stringify({ prompt }),
+      });
+      const { run_id } = await resp.json();
+      currentRunId = run_id;
+      poll();
+    };
+
+    function poll() {
+      pollTimer = setInterval(async () => {
+        const resp = await fetch(`/agent-console/status/${currentRunId}/`);
+        const status = await resp.json();
+        render(status);
+        if (status.done) {
+          clearInterval(pollTimer);
+          document.getElementById('start-btn').disabled = false;
+        }
+      }, 700);
+    }
+
+    function render(status) {
+      const container = document.getElementById('pipeline');
+      let cls = 'stage-row active';
+      if (status.stage === 'ERROR') cls = 'stage-row error';
+      if (status.stage === 'COMPLETE') cls = 'stage-row complete';
+
+      let html = `<div class="${cls}">Stage: ${status.stage}<br><small>${status.log[status.log.length - 1] || ''}</small></div>`;
+
+      if (status.pending_decision === 'fit') {
+        html += `<div class="decision-btns">
+          <button onclick="decide('yes')">✓ Looks good</button>
+          <button onclick="decide('no')">✗ Find better</button>
+        </div>`;
+      }
+      if (status.pending_decision === 'confirm') {
+        html += `<div class="decision-btns">
+          <button onclick="decide('yes')">✓ Approve purchase</button>
+          <button onclick="decide('no')">✗ Decline</button>
+        </div>`;
+      }
+      if (status.checkout_url && status.stage === 'AWAITING_PAYMENT') {
+        html += `<a class="action-link" href="${status.checkout_url}" target="_blank">Open Checkout →</a>`;
+      }
+      if (status.audit_url && status.stage === 'COMPLETE') {
+        html += `<a class="action-link" href="${status.audit_url}" target="_blank">View Audit Trail →</a>`;
+      }
+      if (status.error) {
+        html += `<div class="stage-row error">Error: ${status.error}</div>`;
+      }
+      container.innerHTML = html;
+    }
+
+    async function decide(value) {
+      await fetch(`/agent-console/decision/${currentRunId}/`, {
+        method: 'POST', headers: {'Content-Type': 'application/json'},
+        body: JSON.stringify({ decision: value }),
+      });
+    }
+  </script>
+</body>
+</html>

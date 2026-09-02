@@ -11,10 +11,18 @@ from .views import (
     concurrency_demo_view,
     start_concurrency_race_view,
     concurrency_race_status_view,
+    agent_console_view,
+    agent_console_start_view,
+    agent_console_status_view,
+    agent_console_decision_view,
 )
 
 urlpatterns = [
     path("", catalog_view, name="catalog"),
+    path("agent-console/", agent_console_view, name="agent-console"),
+    path("agent-console/start/", agent_console_start_view, name="agent-console-start"),
+    path("agent-console/status/<str:run_id>/", agent_console_status_view, name="agent-console-status"),
+    path("agent-console/decision/<str:run_id>/", agent_console_decision_view, name="agent-console-decision"),
     path("concurrency-demo/", concurrency_demo_view, name="concurrency-demo"),
     path("concurrency-demo/start/", start_concurrency_race_view, name="concurrency-demo-start"),
     path("concurrency-demo/status/<str:race_id>/", concurrency_race_status_view, name="concurrency-demo-status"),

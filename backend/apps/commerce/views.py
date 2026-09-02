@@ -315,3 +315,38 @@ def concurrency_race_status_view(request, race_id):
     if status is None:
         return JsonResponse({"error": "not found"}, status=404)
     return JsonResponse(status)
+
+def agent_console_view(request):
+    return render(request, "commerce/agent_console.html", {})
+
+
+@csrf_exempt
+def agent_console_start_view(request):
+    if request.method != "POST":
+        return HttpResponse("Method not allowed", status=405)
+    data = json.loads(request.body)
+    prompt = data.get("prompt", "").strip()
+    if not prompt:
+        return JsonResponse({"error": "prompt is required"}, status=400)
+    from apps.commerce.agent_console import start_run
+    run_id = start_run(prompt)
+    return JsonResponse({"run_id": run_id})
+
+
+def agent_console_status_view(request, run_id):
+    from apps.commerce.agent_console import get_run_status
+    status = get_run_status(run_id)
+    if status is None:
+        return JsonResponse({"error": "not found"}, status=404)
+    return JsonResponse(status)
+
+
+@csrf_exempt
+def agent_console_decision_view(request, run_id):
+    if request.method != "POST":
+        return HttpResponse("Method not allowed", status=405)
+    data = json.loads(request.body)
+    decision = data.get("decision")
+    from apps.commerce.agent_console import submit_decision
+    ok = submit_decision(run_id, decision)
+    return JsonResponse({"ok": ok})
