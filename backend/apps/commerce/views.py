@@ -266,7 +266,21 @@ def _run_security_scenario(scenario: str) -> dict:
             resource_type="purchase_intent", resource_id=intent_id,
             parameters={"intent_id": intent_id},
         )
-
+    elif scenario == "tampered_amount_parameter":
+        label = "Tampered Amount Parameter"
+        explanation = (
+            "Confirming normally, then attempting create_order with a "
+            "forged 'amount' parameter (a fraction of the real price) "
+            "smuggled into the call - simulating a client that lies "
+            "about what it wants to pay."
+        )
+        confirm_purchase_intent(intent_id)
+        response = dispatch_tool_call(
+            tool_id="create_order", action="create_order",
+            agent_token=raw_token, task_id=task.task_id,
+            resource_type="purchase_intent", resource_id=intent_id,
+            parameters={"intent_id": intent_id, "amount": 100, "currency": "INR"},
+        )
     else:
         return {"error": f"Unknown scenario '{scenario}'."}
 
