@@ -38,6 +38,17 @@ def start_race() -> str:
 
     race_id = uuid.uuid4().hex[:10]
 
+    from apps.commerce.models import PurchaseMandate, Order, EnvelopeDebit
+
+    PurchaseMandate.objects.filter(intent__intent_id__startswith="race-intent-").delete()
+    Order.objects.filter(purchase_intent__intent_id__startswith="race-intent-").delete()
+    EnvelopeDebit.objects.filter(intent__intent_id__startswith="race-intent-").delete()
+    PurchaseIntent.objects.filter(intent_id__startswith="race-intent-").delete()
+    SpendingEnvelope.objects.filter(envelope_id__startswith="race-env-").delete()
+    Product.objects.filter(product_id__startswith="race-product-").delete()
+    Task.objects.filter(task_id__startswith="race-task-").delete()
+    Agent.objects.filter(agent_id__startswith="race-agent-").delete()
+
     merchant, _ = Merchant.objects.get_or_create(
         merchant_id="reference-merchant", defaults={"name": "Reference Storefront"}
     )
@@ -51,6 +62,7 @@ def start_race() -> str:
     product = Product.objects.create(
         product_id=f"race-product-{race_id}", name="Concurrency Demo Item",
         price_minor=PER_ATTEMPT_AMOUNT_MINOR, currency="INR", merchant=merchant,
+        active=False,
     )
     envelope = SpendingEnvelope.objects.create(
         envelope_id=f"race-env-{race_id}", agent=agent, merchant=merchant,
