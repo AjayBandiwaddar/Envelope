@@ -121,8 +121,21 @@
             <div class="card">
               <!--Card image-->
               <div class="view overlay">
-                <img src="https://placehold.co/500x350/e3ecf7/1c3d5a?text={{ product.name|urlencode }}"
-                  class="card-img-top" alt="{{ product.name }}">
+                {% if product.product_id == "laptop-apex-16" %}
+                <img src="https://m.media-amazon.com/images/I/41SLukLSr4L._SY300_SX300_QL70_FMwebp_.jpg" class="card-img-top" alt="{{ product.name }}" loading="lazy">
+                {% elif product.product_id == "laptop-apex-8" %}
+                <img src="https://m.media-amazon.com/images/I/41+28xHHnrL._SY300_SX300_QL70_FMwebp_.jpg" class="card-img-top" alt="{{ product.name }}" loading="lazy">
+                {% elif product.product_id == "laptop-voyager-16" %}
+                <img src="https://m.media-amazon.com/images/I/41rfK1Y1nxL._SY300_SX300_QL70_FMwebp_.jpg" class="card-img-top" alt="{{ product.name }}" loading="lazy">
+                {% elif product.product_id == "laptop-voyager-32" %}
+                <img src="https://m.media-amazon.com/images/I/41BpHCwXWXL._SY300_SX300_QL70_FMwebp_.jpg" class="card-img-top" alt="{{ product.name }}" loading="lazy">
+                {% elif product.product_id == "laptop-compact-8" %}
+                <img src="https://m.media-amazon.com/images/I/31GSWAQnt2L._SY300_SX300_QL70_FMwebp_.jpg" class="card-img-top" alt="{{ product.name }}" loading="lazy">
+                {% elif product.product_id == "laptop-compact-16" %}
+                <img src="https://m.media-amazon.com/images/I/51iwlPO8eRL._SY300_SX300_QL70_FMwebp_.jpg" class="card-img-top" alt="{{ product.name }}" loading="lazy">
+                {% else %}
+                <img src="https://placehold.co/500x350/e3ecf7/1c3d5a?text={{ product.name|urlencode }}" class="card-img-top" alt="{{ product.name }}" loading="lazy">
+                {% endif %}
                 <a href="{% url 'product-detail' product.product_id %}">
                   <div class="mask rgba-white-slight"></div>
                 </a>

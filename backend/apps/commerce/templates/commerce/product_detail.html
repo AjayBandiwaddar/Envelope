@@ -69,7 +69,21 @@
 
         <!--Grid column-->
         <div class="col-md-6 mb-4">
-          <img src="https://placehold.co/700x500/e3ecf7/1c3d5a?text={{ product.name|urlencode }}" class="img-fluid" alt="{{ product.name }}">
+          {% if product.product_id == "laptop-apex-16" %}
+          <img src="https://m.media-amazon.com/images/I/41SLukLSr4L._SY300_SX300_QL70_FMwebp_.jpg" class="img-fluid" alt="{{ product.name }}" loading="lazy">
+          {% elif product.product_id == "laptop-apex-8" %}
+          <img src="https://m.media-amazon.com/images/I/41+28xHHnrL._SY300_SX300_QL70_FMwebp_.jpg" class="img-fluid" alt="{{ product.name }}" loading="lazy">
+          {% elif product.product_id == "laptop-voyager-16" %}
+          <img src="https://m.media-amazon.com/images/I/41rfK1Y1nxL._SY300_SX300_QL70_FMwebp_.jpg" class="img-fluid" alt="{{ product.name }}" loading="lazy">
+          {% elif product.product_id == "laptop-voyager-32" %}
+          <img src="https://m.media-amazon.com/images/I/41BpHCwXWXL._SY300_SX300_QL70_FMwebp_.jpg" class="img-fluid" alt="{{ product.name }}" loading="lazy">
+          {% elif product.product_id == "laptop-compact-8" %}
+          <img src="https://m.media-amazon.com/images/I/31GSWAQnt2L._SY300_SX300_QL70_FMwebp_.jpg" class="img-fluid" alt="{{ product.name }}" loading="lazy">
+          {% elif product.product_id == "laptop-compact-16" %}
+          <img src="https://m.media-amazon.com/images/I/51iwlPO8eRL._SY300_SX300_QL70_FMwebp_.jpg" class="img-fluid" alt="{{ product.name }}" loading="lazy">
+          {% else %}
+          <img src="https://placehold.co/700x500/e3ecf7/1c3d5a?text={{ product.name|urlencode }}" class="img-fluid" alt="{{ product.name }}" loading="lazy">
+          {% endif %}
         </div>
         <!--Grid column-->
 
@@ -91,12 +105,17 @@
             <p class="lead font-weight-bold">Description</p>
             <p>{{ product.description }}</p>
 
-            <form method="post" action="{% url 'start-purchase' product.product_id %}">
-              {% csrf_token %}
-              <button type="submit" class="btn btn-primary btn-lg">
-                <i class="fas fa-robot mr-2"></i> Buy with AI Agent
+            <div class="d-flex" style="gap: 12px;">
+              <button type="button" class="btn btn-outline-secondary btn-lg" disabled title="Demo only - normal checkout omitted, this project's focus is the agent-gated path">
+                <i class="fas fa-shopping-cart mr-2"></i> Buy Now
               </button>
-            </form>
+              <form method="post" action="{% url 'start-purchase' product.product_id %}">
+                {% csrf_token %}
+                <button type="submit" class="btn btn-primary btn-lg">
+                  <i class="fas fa-robot mr-2"></i> Buy with AI Agent
+                </button>
+              </form>
+            </div>
             <p class="grey-text small mt-2">
               Runs the same propose &rarr; confirm &rarr; create_order flow an autonomous
               buyer agent would call - gated by the authorization firewall at every step.
