@@ -2,56 +2,136 @@
 <html>
 <head>
   <title>Concurrency Demo - Reference Merchant</title>
+  <link rel="stylesheet" href="https://use.fontawesome.com/releases/v5.11.2/css/all.css">
   <style>
-    body { font-family: sans-serif; max-width: 700px; margin: 60px auto; }
-    .attempt-row { padding: 14px; margin: 8px 0; border-radius: 6px; border: 2px solid #ddd; font-size: 16px; }
-    .PENDING { border-color: #ccc; color: #888; }
-    .HELD { border-color: #16a34a; background: #f0fdf4; color: #166534; font-weight: bold; }
-    .DENIED { border-color: #dc2626; background: #fef2f2; color: #991b1b; font-weight: bold; }
-    #run-btn { padding: 12px 24px; font-size: 16px; }
-    #summary { margin-top: 24px; padding: 16px; background: #eff6ff; border-radius: 6px; display: none; }
+    * { box-sizing: border-box; }
+    body {
+      font-family: -apple-system, "Segoe UI", Roboto, sans-serif;
+      max-width: 780px; margin: 40px auto; padding: 0 20px;
+      background: #f7f9fc; color: #1c2530;
+    }
+    header { margin-bottom: 28px; text-align: center; }
+    header h1 { font-size: 28px; margin: 0 0 6px; }
+    header p { color: #667085; margin: 0; font-size: 15px; max-width: 620px; margin: 0 auto; }
+
+    .nav-back { text-align: center; margin-bottom: 18px; }
+    .nav-back a { color: #2563eb; text-decoration: none; font-size: 14px; font-weight: 600; }
+    .nav-back a:hover { text-decoration: underline; }
+
+    #run-btn {
+      display: block; margin: 0 auto 30px; padding: 14px 32px; font-size: 15px;
+      font-weight: 600; color: white; background: #2563eb; border: none;
+      border-radius: 10px; cursor: pointer; transition: background 0.15s;
+    }
+    #run-btn:hover:not(:disabled) { background: #1d4ed8; }
+    #run-btn:disabled { background: #a8b3c2; cursor: not-allowed; }
+
+    .attempt-row {
+      display: flex; align-items: center; gap: 14px;
+      padding: 16px 18px; margin: 10px 0; border-radius: 12px;
+      background: white; border: 1.5px solid #e5e9f0; font-size: 15px;
+      animation: slideIn 0.3s ease;
+    }
+    @keyframes slideIn { from { opacity: 0; transform: translateY(-6px); } to { opacity: 1; transform: translateY(0); } }
+
+    .attempt-icon {
+      width: 34px; height: 34px; border-radius: 50%; display: flex;
+      align-items: center; justify-content: center; flex-shrink: 0; font-size: 14px;
+    }
+    .attempt-row.PENDING { border-color: #e5e9f0; color: #9aa4b2; }
+    .attempt-row.PENDING .attempt-icon { background: #eef1f6; color: #9aa4b2; }
+    .attempt-row.HELD { border-color: #16a34a; background: #f0fdf4; }
+    .attempt-row.HELD .attempt-icon { background: #dcfce7; color: #16a34a; }
+    .attempt-row.DENIED { border-color: #dc2626; background: #fef2f2; }
+    .attempt-row.DENIED .attempt-icon { background: #fee2e2; color: #dc2626; }
+
+    .attempt-title { font-weight: 700; }
+    .attempt-reason { font-size: 13px; color: #667085; margin-top: 2px; }
+
+    #summary {
+      display: none; margin-top: 20px; padding: 18px 20px;
+      background: #eff6ff; border: 1.5px solid #bfdbfe; border-radius: 12px;
+      font-size: 14.5px; line-height: 1.6;
+    }
+    #summary strong { color: #1e3a8a; }
+
+    .explainer {
+      background: white; border: 1.5px solid #e5e9f0; border-radius: 12px;
+      padding: 18px 20px; margin-bottom: 24px; font-size: 14.5px; color: #475467; line-height: 1.6;
+    }
   </style>
 </head>
 <body>
-  <h1>Concurrency Demo</h1>
-  <p>
-    3 purchase attempts fire at the exact same instant against one
-    SpendingEnvelope with balance for only ONE of them. The database's
-    atomic conditional update - not application-level locking - decides
-    which one wins. Nothing here is scripted or pre-determined.
-  </p>
+  <div class="nav-back"><a href="/security-demo/">← Back to Security Demo</a></div>
+
+  <header>
+    <h1>⚡ Concurrency Guarantee</h1>
+    <p>Three purchase attempts fire at the exact same instant against one SpendingEnvelope with balance for only ONE of them.</p>
+  </header>
+
+  <div class="explainer">
+    The database's own atomic conditional update — not application-level locking — decides which one wins.
+    Nothing here is scripted or pre-determined; this runs the real authorization code, live, right now.
+  </div>
+
   <button id="run-btn">Run Concurrency Race</button>
   <div id="attempts"></div>
   <div id="summary"></div>
 
   <script>
+    function makeAttemptRow(index) {
+      const row = document.createElement('div');
+      row.className = 'attempt-row PENDING';
+      row.dataset.index = index;
+      row.innerHTML = `
+        <div class="attempt-icon"><i class="fas fa-clock"></i></div>
+        <div>
+          <div class="attempt-title">Attempt ${index + 1}: PENDING</div>
+          <div class="attempt-reason"></div>
+        </div>`;
+      return row;
+    }
+
     document.getElementById('run-btn').onclick = async function () {
       this.disabled = true;
-      document.getElementById('attempts').innerHTML = '';
+      this.textContent = 'Running...';
+      const container = document.getElementById('attempts');
+      container.innerHTML = '';
       document.getElementById('summary').style.display = 'none';
 
       const startResp = await fetch('/concurrency-demo/start/', { method: 'POST' });
       const { race_id } = await startResp.json();
 
+      let rowsBuilt = false;
+
       const poll = setInterval(async () => {
         const statusResp = await fetch(`/concurrency-demo/status/${race_id}/`);
         const status = await statusResp.json();
 
-        const container = document.getElementById('attempts');
-        container.innerHTML = '';
+        if (!rowsBuilt) {
+          Object.keys(status.attempts).forEach(i => container.appendChild(makeAttemptRow(parseInt(i))));
+          rowsBuilt = true;
+        }
+
         Object.entries(status.attempts).forEach(([i, a]) => {
-          const row = document.createElement('div');
+          const row = container.querySelector(`[data-index="${i}"]`);
+          if (row.className === `attempt-row ${a.status}`) return; // no change, skip
           row.className = `attempt-row ${a.status}`;
-          row.textContent = `Attempt ${parseInt(i) + 1}: ${a.status}` + (a.reason ? ` (${a.reason})` : '');
-          container.appendChild(row);
+          const icon = a.status === 'HELD' ? 'fa-check' : a.status === 'DENIED' ? 'fa-times' : 'fa-clock';
+          row.querySelector('.attempt-icon').innerHTML = `<i class="fas ${icon}"></i>`;
+          row.querySelector('.attempt-title').textContent = `Attempt ${parseInt(i) + 1}: ${a.status}`;
+          row.querySelector('.attempt-reason').textContent = a.reason || '';
         });
 
         if (status.done) {
           clearInterval(poll);
-          document.getElementById('run-btn').disabled = false;
+          const btn = document.getElementById('run-btn');
+          btn.disabled = false;
+          btn.textContent = 'Run Again';
           const summary = document.getElementById('summary');
           summary.style.display = 'block';
-          summary.innerHTML = `<strong>Final envelope balance: ₹${(status.final_remaining / 100).toFixed(2)} / ₹${(status.max_balance / 100).toFixed(2)}</strong><br>Exactly one attempt was held; the rest were correctly denied by the database's own atomic guarantee - never overdrawn, under real concurrent access.`;
+          summary.innerHTML = `<strong>Final envelope balance: ₹${(status.final_remaining / 100).toFixed(2)} / ₹${(status.max_balance / 100).toFixed(2)}</strong><br>
+            Exactly one attempt was held; the rest were correctly denied by the database's own atomic guarantee — never overdrawn, under real concurrent access.`;
         }
       }, 300);
     };
