@@ -6,75 +6,132 @@
   <meta name="viewport" content="width=device-width, initial-scale=1, shrink-to-fit=no">
   <title>Security Demo - Reference Merchant</title>
   <link rel="stylesheet" href="https://use.fontawesome.com/releases/v5.11.2/css/all.css">
-  <link href="{% static 'commerce/css/bootstrap.min.css' %}" rel="stylesheet">
-  <link href="{% static 'commerce/css/mdb.min.css' %}" rel="stylesheet">
-  <link href="{% static 'commerce/css/style.min.css' %}" rel="stylesheet">
+  <style>
+    * { box-sizing: border-box; }
+    body {
+      font-family: -apple-system, "Segoe UI", Roboto, sans-serif;
+      max-width: 780px; margin: 40px auto; padding: 0 20px;
+      background: #f7f9fc; color: #1c2530;
+    }
+    header { margin-bottom: 20px; text-align: center; }
+    header h1 { font-size: 28px; margin: 0 0 6px; }
+    header p { color: #667085; margin: 0; font-size: 15px; max-width: 620px; margin: 0 auto; }
+
+    .nav-back { text-align: center; margin-bottom: 18px; }
+    .nav-back a { color: #2563eb; text-decoration: none; font-size: 14px; font-weight: 600; }
+    .nav-back a:hover { text-decoration: underline; }
+
+    .concurrency-link { text-align: center; margin: 20px 0 28px; }
+    .concurrency-link a {
+      display: inline-block; padding: 10px 20px; border-radius: 10px;
+      border: 1.5px solid #93c5fd; color: #1d4ed8; background: #eff6ff;
+      text-decoration: none; font-weight: 600; font-size: 14px; transition: background 0.15s;
+    }
+    .concurrency-link a:hover { background: #dbeafe; }
+
+    .scenario-form { display: flex; flex-wrap: wrap; gap: 10px; justify-content: center; margin-bottom: 28px; }
+    .scenario-btn {
+      padding: 12px 18px; border-radius: 10px; border: 1.5px solid #fca5a5;
+      background: white; color: #b91c1c; font-weight: 600; font-size: 14px;
+      cursor: pointer; transition: all 0.15s;
+    }
+    .scenario-btn:hover { background: #fef2f2; border-color: #dc2626; }
+
+    .result-card {
+      background: white; border: 1.5px solid #e5e9f0; border-radius: 14px;
+      padding: 22px 24px; animation: slideIn 0.3s ease;
+    }
+    @keyframes slideIn { from { opacity: 0; transform: translateY(-6px); } to { opacity: 1; transform: translateY(0); } }
+    .result-title { font-size: 19px; font-weight: 700; margin: 0 0 8px; }
+    .result-explanation { color: #667085; font-size: 14.5px; line-height: 1.6; margin-bottom: 16px; }
+
+    .result-row { margin-bottom: 8px; font-size: 14.5px; }
+    .result-row .label { color: #475467; }
+    .badge-decision {
+      display: inline-block; padding: 3px 12px; border-radius: 999px;
+      font-weight: 700; font-size: 12.5px; letter-spacing: 0.03em;
+    }
+    .badge-allow { background: #fef3c7; color: #92400e; }
+    .badge-deny { background: #fee2e2; color: #991b1b; }
+
+    code {
+      background: #f2f4f8; padding: 2px 6px; border-radius: 5px; font-size: 13px; color: #334155;
+    }
+    .result-payload {
+      background: #f8fafc; border: 1px solid #e5e9f0; border-radius: 8px;
+      padding: 10px 12px; font-size: 12.5px; color: #475467; overflow-x: auto; margin-top: 6px;
+    }
+
+    .calls-row { font-weight: 700; font-size: 14.5px; margin-top: 14px; }
+    .calls-zero { color: #16a34a; }
+    .calls-nonzero { color: #dc2626; }
+
+    .info-box {
+      margin-top: 16px; padding: 14px 16px; background: #eff6ff;
+      border: 1.5px solid #bfdbfe; border-radius: 10px; font-size: 13.5px; color: #1e3a8a; line-height: 1.6;
+    }
+    .alert-warning {
+      background: #fffbeb; border: 1.5px solid #fde68a; color: #92400e;
+      border-radius: 10px; padding: 14px 16px; font-size: 14px;
+    }
+
+    footer { text-align: center; margin-top: 40px; padding: 20px 0; color: #98a2b3; font-size: 13px; }
+  </style>
 </head>
 <body>
-  <nav class="navbar fixed-top navbar-expand-lg navbar-light white scrolling-navbar">
-    <div class="container">
-      <a class="navbar-brand waves-effect" href="{% url 'catalog' %}"><strong class="blue-text">Reference Merchant</strong></a>
-    </div>
-  </nav>
+  <div class="nav-back"><a href="{% url 'catalog' %}">← Reference Merchant</a></div>
 
-  <main class="mt-5 pt-4">
-    <div class="container">
-      <h2 class="h1-responsive font-weight-bold my-4">Security Demo</h2>
-      <p class="grey-text">
-        Each button below runs a real attack against the live authorization path -
-        a fresh, disposable agent/task/purchase is created for every run. Nothing here is scripted or faked.
-      </p>
-      <div class="mb-4">
-        <a href="{% url 'concurrency-demo' %}" class="btn btn-outline-info">
-          <i class="fas fa-bolt"></i> Watch the Concurrency Guarantee Live
-        </a>
+  <header>
+    <h1>🛡️ Security Demo</h1>
+    <p>Each button below runs a real attack against the live authorization path — a fresh, disposable agent/task/purchase is created for every run. Nothing here is scripted or faked.</p>
+  </header>
+
+  <div class="concurrency-link">
+    <a href="{% url 'concurrency-demo' %}"><i class="fas fa-bolt"></i> Watch the Concurrency Guarantee Live</a>
+  </div>
+
+  <form method="post" class="scenario-form">
+    {% csrf_token %}
+    <button type="submit" name="scenario" value="skip_confirmation" class="scenario-btn">1. Skip Confirmation</button>
+    <button type="submit" name="scenario" value="unknown_parameter" class="scenario-btn">2. Unknown Parameter</button>
+    <button type="submit" name="scenario" value="tampered_mandate" class="scenario-btn">3. Tampered Mandate</button>
+    <button type="submit" name="scenario" value="tampered_amount_parameter" class="scenario-btn">4. Tampered Amount Parameter</button>
+  </form>
+
+  {% if result %}
+    {% if result.error %}
+      <div class="alert-warning">{{ result.error }}</div>
+    {% else %}
+    <div class="result-card">
+      <div class="result-title">{{ result.label }}</div>
+      <div class="result-explanation">{{ result.explanation }}</div>
+
+      <div class="result-row">
+        <span class="label">Decision:</span>
+        <span class="badge-decision {% if result.decision == 'ALLOW' %}badge-allow{% else %}badge-deny{% endif %}">{{ result.decision }}</span>
+      </div>
+      <div class="result-row"><span class="label">Reason code:</span> <code>{{ result.reason_code }}</code></div>
+      <div class="result-row"><span class="label">Reason:</span> {{ result.reason }}</div>
+      {% if result.result %}
+        <div class="result-row">
+          <span class="label">Result:</span>
+          <div class="result-payload"><code>{{ result.result }}</code></div>
+        </div>
+      {% endif %}
+
+      <div class="calls-row {% if result.razorpay_calls_made == 0 %}calls-zero{% else %}calls-nonzero{% endif %}">
+        Razorpay order-creation calls made: {{ result.razorpay_calls_made }}
       </div>
 
-      <form method="post" class="mb-4">
-        {% csrf_token %}
-        <button type="submit" name="scenario" value="skip_confirmation" class="btn btn-outline-danger">1. Skip Confirmation</button>
-        <button type="submit" name="scenario" value="unknown_parameter" class="btn btn-outline-danger">2. Unknown Parameter</button>
-        <button type="submit" name="scenario" value="tampered_mandate" class="btn btn-outline-danger">3. Tampered Mandate</button>
-        <button type="submit" name="scenario" value="tampered_amount_parameter" class="btn btn-outline-danger">4. Tampered Amount Parameter</button>
-      </form>
-
-      {% if result %}
-        {% if result.error %}
-          <div class="alert alert-warning">{{ result.error }}</div>
-        {% else %}
-        <div class="card">
-          <div class="card-body">
-            <h5 class="card-title">{{ result.label }}</h5>
-            <p class="grey-text">{{ result.explanation }}</p>
-            <p class="mb-1">Decision:
-              <span class="badge {% if result.decision == 'ALLOW' %}orange{% else %}red{% endif %}">{{ result.decision }}</span>
-            </p>
-            <p class="mb-1">Reason code: <code>{{ result.reason_code }}</code></p>
-            <p class="mb-1">Reason: {{ result.reason }}</p>
-            {% if result.result %}<p class="mb-1">Result: <code>{{ result.result }}</code></p>{% endif %}
-            <p class="mb-1 font-weight-bold {% if result.razorpay_calls_made == 0 %}text-success{% else %}text-danger{% endif %}">
-              Razorpay order-creation calls made: {{ result.razorpay_calls_made }}
-            </p>
-            {% if scenario == "tampered_mandate" %}
-              <div class="alert alert-info mt-3 mb-0">
-                Note the split: the <strong>Policy layer said ALLOW</strong> (its resource scope genuinely matched this intent -
-                tampering the mandate's stored payload doesn't touch the Policy row at all), but the
-                <strong>cryptographic mandate check inside create_order blocked it anyway</strong>, before any Razorpay call.
-                Two independent layers - either one stops the attack.
-              </div>
-            {% endif %}
-          </div>
+      {% if scenario == "tampered_mandate" %}
+        <div class="info-box">
+          Note the split: the <strong>Policy layer said ALLOW</strong> (its resource scope genuinely matched this intent — tampering the mandate's stored payload doesn't touch the Policy row at all), but the <strong>cryptographic mandate check inside create_order blocked it anyway</strong>, before any Razorpay call. Two independent layers — either one stops the attack.
         </div>
-        {% endif %}
       {% endif %}
     </div>
-  </main>
+    {% endif %}
+  {% endif %}
 
-  <footer class="page-footer text-center font-small mt-4">
-    <div class="footer-copyright py-3">Reference Merchant - Razorpay AI Buildathon 2026.</div>
-  </footer>
-  <script type="text/javascript" src="{% static 'commerce/js/jquery-3.4.1.min.js' %}"></script>
-  <script type="text/javascript" src="{% static 'commerce/js/bootstrap.min.js' %}"></script>
-  <script type="text/javascript" src="{% static 'commerce/js/mdb.min.js' %}"></script>
+  <footer>Reference Merchant · Razorpay AI Buildathon 2026</footer>
 </body>
 </html>
