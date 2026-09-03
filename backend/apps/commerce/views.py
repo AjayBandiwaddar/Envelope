@@ -74,8 +74,8 @@ def checkout_view(request, order_id):
             body: JSON.stringify(response),
           }}).then(function () {{
             document.getElementById('result').innerHTML =
-              "Payment received - you can close this tab, the agent will pick it up automatically." +
-              '<br><br><a href="/checkout/{order.purchase_intent.intent_id}/audit/" class="btn btn-outline-primary btn-sm">View purchase audit</a>';
+              "Payment received - returning you to the Agent Console...";
+            setTimeout(function () {{ window.location.href = "/agent-console/?run_id={request.GET.get('run_id', '')}"; }}, 2000);
           }});
         }}
       }};
@@ -137,6 +137,46 @@ def audit_trail_view(request, intent_id):
         "not_expired": not_expired,
     })
 
+def buy_now_view(request, product_id):
+    """
+    A genuinely plain human checkout - deliberately bypasses the MCP
+    dispatch layer, Policy engine, and PurchaseMandate entirely. This
+    is what an ordinary e-commerce buyer does: pick a product, pay.
+    No agent, no task, no authorization firewall involved - proving
+    the same catalog is usable by a human directly, not just via an
+    agent. Contrast with 'Buy with AI Agent', which is fully gated.
+    """
+    if request.method != "POST":
+        return HttpResponse("Method not allowed", status=405)
+    import uuid
+    from apps.commerce.models import Product, PurchaseIntent, PurchaseIntentStatus, Order, OrderStatus
+    from apps.commerce.razorpay_client import create_razorpay_order
+
+    try:
+        product = Product.objects.get(product_id=product_id, active=True)
+    except Product.DoesNotExist:
+        raise Http404("Product not found")
+
+    intent = PurchaseIntent.objects.create(
+        intent_id=f"human-intent-{uuid.uuid4().hex[:12]}",
+        task=None, agent_id="human-web-buyer", user_id="web-guest",
+        product=product, quantity=1,
+        canonical_amount_minor=product.price_minor, currency=product.currency,
+        status=PurchaseIntentStatus.COMPLETED,
+    )
+    order = Order.objects.create(
+        order_id=f"human-order-{uuid.uuid4().hex[:12]}",
+        purchase_intent=intent, status=OrderStatus.CREATED,
+        amount_minor=intent.canonical_amount_minor, currency=intent.currency,
+    )
+    rzp_order = create_razorpay_order({
+        "amount": order.amount_minor, "currency": order.currency,
+        "receipt": intent.intent_id, "payment_capture": 1,
+    })
+    order.razorpay_order_id = rzp_order["id"]
+    order.save(update_fields=["razorpay_order_id", "updated_at"])
+
+    return redirect("checkout", order_id=order.order_id)
 
 def start_purchase_view(request, product_id):
     """

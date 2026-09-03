@@ -38,4 +38,8 @@ def create_razorpay_order(payload: dict) -> dict:
     every actual provider invocation is countable at one single point."""
     global _order_create_call_count
     _order_create_call_count += 1
+    from django.conf import settings
+    config_id = getattr(settings, "RAZORPAY_CHECKOUT_CONFIG_ID", "")
+    if config_id and "checkout_config_id" not in payload:
+        payload = {**payload, "checkout_config_id": config_id}
     return get_client().order.create(payload)

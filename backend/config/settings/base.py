@@ -143,6 +143,7 @@ REST_FRAMEWORK = {
 ADMIN_API_TOKEN = env("ADMIN_API_TOKEN", default="dev-admin-token-change-me")
 RAZORPAY_KEY_ID = env("RAZORPAY_KEY_ID", default="")
 RAZORPAY_KEY_SECRET = env("RAZORPAY_KEY_SECRET", default="")
+RAZORPAY_CHECKOUT_CONFIG_ID = env("RAZORPAY_CHECKOUT_CONFIG_ID", default="")
 DEMO_AGENT_TOKEN = env("DEMO_AGENT_TOKEN", default="")
 DEMO_TASK_ID = env("DEMO_TASK_ID", default="demo-buyer-task")
 MANDATE_PRIVATE_KEY = env("MANDATE_PRIVATE_KEY", default="")
