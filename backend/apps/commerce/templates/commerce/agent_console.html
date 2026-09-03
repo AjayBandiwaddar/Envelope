@@ -2,38 +2,184 @@
 <html>
 <head>
   <title>Agent Console - Reference Merchant</title>
+  <link rel="stylesheet" href="https://use.fontawesome.com/releases/v5.11.2/css/all.css">
   <style>
-    body { font-family: sans-serif; max-width: 720px; margin: 50px auto; }
-    #prompt-box { width: 100%; padding: 12px; font-size: 16px; box-sizing: border-box; }
-    #start-btn { padding: 10px 20px; font-size: 15px; margin-top: 10px; }
-    .stage-row { padding: 12px 16px; margin: 6px 0; border-radius: 6px; border: 2px solid #ddd; color: #444; }
-    .stage-row.active { border-color: #2563eb; background: #eff6ff; font-weight: bold; }
-    .stage-row.error { border-color: #dc2626; background: #fef2f2; color: #991b1b; }
-    .stage-row.complete { border-color: #16a34a; background: #f0fdf4; color: #166534; }
-    .decision-btns { margin-top: 10px; }
-    .decision-btns button { padding: 8px 16px; margin-right: 8px; }
-    a.action-link { display: inline-block; margin-top: 10px; padding: 8px 16px; background: #2563eb; color: white; text-decoration: none; border-radius: 4px; }
+    * { box-sizing: border-box; }
+    body {
+      font-family: -apple-system, "Segoe UI", Roboto, sans-serif;
+      max-width: 780px; margin: 40px auto; padding: 0 20px;
+      background: #f7f9fc; color: #1c2530;
+    }
+    header { margin-bottom: 28px; text-align: center; }
+    header h1 { font-size: 28px; margin: 0 0 6px; }
+    header p { color: #667085; margin: 0; font-size: 15px; }
+
+    .input-row { display: flex; gap: 10px; margin-bottom: 32px; }
+    #prompt-box {
+      flex: 1; padding: 14px 16px; font-size: 15px; border: 2px solid #d7dce3;
+      border-radius: 10px; outline: none; transition: border-color 0.15s;
+    }
+    #prompt-box:focus { border-color: #2563eb; }
+    #start-btn {
+      padding: 14px 26px; font-size: 15px; font-weight: 600; color: white;
+      background: #2563eb; border: none; border-radius: 10px; cursor: pointer;
+      transition: background 0.15s;
+    }
+    #start-btn:hover:not(:disabled) { background: #1d4ed8; }
+    #start-btn:disabled { background: #a8b3c2; cursor: not-allowed; }
+
+    #pipeline { display: flex; flex-direction: column; gap: 10px; }
+
+    .stage-card {
+      display: flex; align-items: center; gap: 14px;
+      padding: 16px 18px; border-radius: 12px; background: white;
+      border: 1.5px solid #e5e9f0; transition: all 0.25s ease;
+      animation: slideIn 0.3s ease;
+    }
+    @keyframes slideIn { from { opacity: 0; transform: translateY(-6px); } to { opacity: 1; transform: translateY(0); } }
+
+    .stage-card.active {
+      border-color: #2563eb; box-shadow: 0 2px 10px rgba(37,99,235,0.12);
+    }
+    .stage-card.done { border-color: #16a34a; }
+    .stage-card.error-card { border-color: #dc2626; background: #fef2f2; }
+
+    .stage-icon {
+      width: 34px; height: 34px; border-radius: 50%; display: flex;
+      align-items: center; justify-content: center; flex-shrink: 0;
+      background: #eef1f6; color: #9aa4b2; font-size: 14px;
+    }
+    .stage-card.active .stage-icon { background: #dbeafe; color: #2563eb; }
+    .stage-card.done .stage-icon { background: #dcfce7; color: #16a34a; }
+    .stage-card.error-card .stage-icon { background: #fee2e2; color: #dc2626; }
+
+    .checkout-banner {
+      display: block; margin-top: 16px; padding: 20px; text-align: center;
+      background: #16a34a; color: white; font-size: 17px; font-weight: 700;
+      border-radius: 12px; text-decoration: none;
+      animation: pulseGlow 1.4s ease-in-out infinite;
+    }
+    .checkout-banner:hover { background: #15803d; }
+    @keyframes pulseGlow {
+      0%, 100% { box-shadow: 0 0 0 0 rgba(22,163,74,0.5); }
+      50% { box-shadow: 0 0 0 14px rgba(22,163,74,0); }
+    }
+
+    .stage-text { flex: 1; }
+    .stage-title { font-weight: 600; font-size: 14.5px; margin-bottom: 2px; }
+    .stage-detail { font-size: 13px; color: #667085; }
+
+    .dots::after {
+      content: ''; display: inline-block; width: 1em; text-align: left;
+      animation: dots 1.2s steps(4, end) infinite;
+    }
+    @keyframes dots {
+      0% { content: ''; } 25% { content: '.'; } 50% { content: '..'; } 75% { content: '...'; } 100% { content: ''; }
+    }
+
+    .action-link {
+      display: inline-block; margin-top: 14px; padding: 10px 20px;
+      background: #2563eb; color: white; text-decoration: none;
+      border-radius: 8px; font-weight: 600; font-size: 14px;
+    }
+
+    /* Decision Modal */
+    #modal-backdrop {
+      display: none; position: fixed; inset: 0; background: rgba(15,23,42,0.55);
+      align-items: center; justify-content: center; z-index: 1000;
+    }
+    #modal-backdrop.show { display: flex; }
+    #modal-card {
+      background: white; border-radius: 16px; padding: 28px; width: 380px;
+      text-align: center; box-shadow: 0 20px 50px rgba(0,0,0,0.25);
+      animation: pop 0.2s ease;
+    }
+    @keyframes pop { from { transform: scale(0.92); opacity: 0; } to { transform: scale(1); opacity: 1; } }
+    #modal-card img {
+      width: 100%; height: 180px; object-fit: contain; border-radius: 10px;
+      background: #f2f4f8; margin-bottom: 14px;
+    }
+    #modal-title { font-size: 18px; font-weight: 700; margin-bottom: 4px; }
+    #modal-price { color: #667085; font-size: 14px; margin-bottom: 6px; }
+    #modal-question { font-size: 14.5px; color: #344054; margin-bottom: 18px; }
+    .modal-btns { display: flex; gap: 10px; }
+    .modal-btns button {
+      flex: 1; padding: 12px; border: none; border-radius: 10px;
+      font-weight: 600; font-size: 14.5px; cursor: pointer; transition: transform 0.1s;
+    }
+    .modal-btns button:active { transform: scale(0.97); }
+    .btn-yes { background: #16a34a; color: white; }
+    .btn-yes:hover { background: #15803d; }
+    .btn-no { background: #fee2e2; color: #b91c1c; }
+    .btn-no:hover { background: #fecaca; }
   </style>
 </head>
 <body>
-  <h1>Agent Console</h1>
-  <p>Tell the agent what you're looking for. Every step below is a real, gated action - not a simulation.</p>
+  <header>
+    <h1>Agent Console</h1>
+    <p>Tell the agent what you're looking for. Every step below is a real, gated action — not a simulation.</p>
+  </header>
 
-  <input id="prompt-box" type="text" placeholder="e.g. find me the best laptop under 60000 rupees with at least 16gb ram" value="find me the best laptop under 60000 rupees with at least 16gb ram">
-  <br>
-  <button id="start-btn">Start</button>
+  <div class="input-row">
+    <input id="prompt-box" type="text" placeholder="e.g. find me the best laptop under 60000 rupees with at least 16gb ram"
+      value="find me the best laptop under 60000 rupees with at least 16gb ram">
+    <button id="start-btn">Start</button>
+  </div>
 
-  <div id="pipeline" style="margin-top: 24px;"></div>
+  <div id="pipeline"></div>
+
+  <div id="modal-backdrop">
+    <div id="modal-card">
+      <img id="modal-img" src="" alt="">
+      <div id="modal-title"></div>
+      <div id="modal-price"></div>
+      <div id="modal-question"></div>
+      <div class="modal-btns">
+        <button class="btn-yes" id="modal-yes-btn"></button>
+        <button class="btn-no" id="modal-no-btn"></button>
+      </div>
+    </div>
+  </div>
 
   <script>
+    const PRODUCT_INFO = {
+      "Apex 16":     { img: "https://m.media-amazon.com/images/I/41SLukLSr4L._SY300_SX300_QL70_FMwebp_.jpg", price: "₹57,999" },
+      "Apex 8":      { img: "https://m.media-amazon.com/images/I/41+28xHHnrL._SY300_SX300_QL70_FMwebp_.jpg", price: "₹42,999" },
+      "Voyager 16":  { img: "https://m.media-amazon.com/images/I/41rfK1Y1nxL._SY300_SX300_QL70_FMwebp_.jpg", price: "₹64,999" },
+      "Voyager 32":  { img: "https://m.media-amazon.com/images/I/41BpHCwXWXL._SY300_SX300_QL70_FMwebp_.jpg", price: "₹89,999" },
+      "Compact 8":   { img: "https://m.media-amazon.com/images/I/31GSWAQnt2L._SY300_SX300_QL70_FMwebp_.jpg", price: "₹39,999" },
+      "Compact 16":  { img: "https://m.media-amazon.com/images/I/51iwlPO8eRL._SY300_SX300_QL70_FMwebp_.jpg", price: "₹54,999" },
+    };
+    const FALLBACK_IMG = "https://placehold.co/400x300/e3ecf7/1c3d5a?text=Product";
+
+    const STAGES = [
+      { key: "STARTING",         label: "Starting up",              icon: "fa-power-off" },
+      { key: "SEARCHING",        label: "Searching catalog",        icon: "fa-search" },
+      { key: "FIT_CHECK",        label: "Product fit check",        icon: "fa-thumbs-up" },
+      { key: "AUTHORIZING",      label: "Checking authorization",   icon: "fa-shield-alt" },
+      { key: "CONFIRM_CHECK",    label: "Awaiting your approval",   icon: "fa-user-check" },
+      { key: "AUTHORIZED",       label: "Authorized",               icon: "fa-check-circle" },
+      { key: "CREATING_ORDER",   label: "Creating order",           icon: "fa-file-invoice" },
+      { key: "AWAITING_PAYMENT", label: "Awaiting payment",         icon: "fa-credit-card" },
+      { key: "FINALIZING",       label: "Finalizing payment",       icon: "fa-hourglass-half" },
+      { key: "COMPLETE",         label: "Purchase complete",        icon: "fa-flag-checkered" },
+    ];
+
     let currentRunId = null;
     let pollTimer = null;
+    let lastPendingDecision = null;
+    let checkoutTabOpened = false;
 
     document.getElementById('start-btn').onclick = async function () {
       const prompt = document.getElementById('prompt-box').value.trim();
       if (!prompt) return;
       this.disabled = true;
+      lastPendingDecision = null;
+      checkoutTabOpened = false;
+      renderedCount = 0;
+      lastStageKey = null;
       document.getElementById('pipeline').innerHTML = '';
+      hideModal();
 
       const resp = await fetch('/agent-console/start/', {
         method: 'POST', headers: {'Content-Type': 'application/json'},
@@ -48,6 +194,15 @@
       pollTimer = setInterval(async () => {
         const resp = await fetch(`/agent-console/status/${currentRunId}/`);
         const status = await resp.json();
+        if (status.error === 'not found') {
+          clearInterval(pollTimer);
+          document.getElementById('pipeline').innerHTML =
+            '<div class="stage-card error-card"><div class="stage-icon"><i class="fas fa-exclamation-triangle"></i></div>' +
+            '<div class="stage-text"><div class="stage-title">Run not found</div>' +
+            '<div class="stage-detail">The server may have restarted. Please start a new search.</div></div></div>';
+          document.getElementById('start-btn').disabled = false;
+          return;
+        }
         render(status);
         if (status.done) {
           clearInterval(pollTimer);
@@ -56,44 +211,136 @@
       }, 700);
     }
 
+    let renderedCount = 0;
+    let lastStageKey = null;
+
+    function makeStageCardEl(s) {
+      const div = document.createElement('div');
+      div.className = 'stage-card';
+      div.dataset.key = s.key;
+      div.innerHTML = `
+        <div class="stage-icon"><i class="fas ${s.icon}"></i></div>
+        <div class="stage-text">
+          <div class="stage-title">${s.label}</div>
+          <div class="stage-detail"></div>
+        </div>`;
+      return div;
+    }
+
     function render(status) {
       const container = document.getElementById('pipeline');
-      let cls = 'stage-row active';
-      if (status.stage === 'ERROR') cls = 'stage-row error';
-      if (status.stage === 'COMPLETE') cls = 'stage-row complete';
+      const latestLog = status.log[status.log.length - 1] || '';
+      let currentIndex = STAGES.findIndex(s => s.key === status.stage);
+      if (currentIndex === -1) currentIndex = 0;
 
-      let html = `<div class="${cls}">Stage: ${status.stage}<br><small>${status.log[status.log.length - 1] || ''}</small></div>`;
+      // Reset if a brand new run started (stage went backwards, e.g. STARTING again).
+      if (status.stage === 'STARTING' && lastStageKey !== null && lastStageKey !== 'STARTING') {
+        container.innerHTML = '';
+        renderedCount = 0;
+      }
+      lastStageKey = status.stage;
 
-      if (status.pending_decision === 'fit') {
-        html += `<div class="decision-btns">
-          <button onclick="decide('yes')">✓ Looks good</button>
-          <button onclick="decide('no')">✗ Find better</button>
-        </div>`;
+      // Only APPEND newly-revealed stage cards - never rebuild existing ones.
+      while (renderedCount <= currentIndex) {
+        container.appendChild(makeStageCardEl(STAGES[renderedCount]));
+        renderedCount++;
       }
-      if (status.pending_decision === 'confirm') {
-        html += `<div class="decision-btns">
-          <button onclick="decide('yes')">✓ Approve purchase</button>
-          <button onclick="decide('no')">✗ Decline</button>
-        </div>`;
+
+      // Update classes/detail text on existing cards in place - no re-render, no re-animation.
+      const cards = container.querySelectorAll('.stage-card');
+      cards.forEach((card, i) => {
+        const detailEl = card.querySelector('.stage-detail');
+        card.classList.remove('active', 'done', 'error-card');
+        if (status.stage === 'ERROR' && i === currentIndex) {
+          card.classList.add('error-card');
+          detailEl.textContent = status.error || latestLog;
+        } else if (i < currentIndex || (i === currentIndex && status.done)) {
+          card.classList.add('done');
+          detailEl.innerHTML = '';
+        } else if (i === currentIndex) {
+          card.classList.add('active');
+          if (detailEl.querySelector('.dots') === null || detailEl.textContent.replace(/\.+$/, '') !== latestLog) {
+            detailEl.innerHTML = `<span class="dots">${latestLog}</span>`;
+          }
+        }
+      });
+
+      // Audit link - only add once.
+      if (status.audit_url && status.stage === 'COMPLETE' && !document.getElementById('audit-link')) {
+        const a = document.createElement('a');
+        a.id = 'audit-link';
+        a.className = 'action-link';
+        a.href = status.audit_url;
+        a.target = '_blank';
+        a.textContent = 'View Audit Trail →';
+        container.appendChild(a);
       }
-      if (status.checkout_url && status.stage === 'AWAITING_PAYMENT') {
-        html += `<a class="action-link" href="${status.checkout_url}" target="_blank">Open Checkout →</a>`;
+
+      // Same-tab navigation is never blocked by browsers, unlike window.open().
+      // Pass run_id through so checkout can hand it back after payment.
+      if (status.checkout_url && !checkoutTabOpened) {
+        checkoutTabOpened = true;
+        window.location.href = status.checkout_url + '?run_id=' + encodeURIComponent(currentRunId);
       }
-      if (status.audit_url && status.stage === 'COMPLETE') {
-        html += `<a class="action-link" href="${status.audit_url}" target="_blank">View Audit Trail →</a>`;
+
+      if (status.pending_decision && status.pending_decision !== lastPendingDecision) {
+        lastPendingDecision = status.pending_decision;
+        showModal(status.pending_decision, status.product_name);
       }
-      if (status.error) {
-        html += `<div class="stage-row error">Error: ${status.error}</div>`;
+      if (!status.pending_decision) {
+        lastPendingDecision = null;
+        hideModal();
       }
-      container.innerHTML = html;
+    }
+
+    function showModal(kind, productName) {
+      const info = PRODUCT_INFO[productName] || { img: FALLBACK_IMG, price: '' };
+      document.getElementById('modal-img').src = info.img;
+      document.getElementById('modal-title').textContent = productName || 'Proposed item';
+      document.getElementById('modal-price').textContent = info.price;
+
+      const yesBtn = document.getElementById('modal-yes-btn');
+      const noBtn = document.getElementById('modal-no-btn');
+
+      if (kind === 'fit') {
+        document.getElementById('modal-question').textContent = 'Is this what you wanted?';
+        yesBtn.innerHTML = '<i class="fas fa-check"></i> Looks good';
+        noBtn.innerHTML = '<i class="fas fa-redo"></i> Find better';
+      } else {
+        document.getElementById('modal-question').textContent = 'Approve this purchase?';
+        yesBtn.innerHTML = '<i class="fas fa-check"></i> Approve';
+        noBtn.innerHTML = '<i class="fas fa-times"></i> Decline';
+      }
+      yesBtn.onclick = () => decide('yes');
+      noBtn.onclick = () => decide('no');
+
+      document.getElementById('modal-backdrop').classList.add('show');
+    }
+
+    function hideModal() {
+      document.getElementById('modal-backdrop').classList.remove('show');
     }
 
     async function decide(value) {
+      hideModal();
       await fetch(`/agent-console/decision/${currentRunId}/`, {
         method: 'POST', headers: {'Content-Type': 'application/json'},
         body: JSON.stringify({ decision: value }),
       });
     }
+
+    // On page load, resume an in-progress run if we were sent back here
+    // from checkout with ?run_id=... instead of waiting for a fresh Start click.
+    (function resumeIfNeeded() {
+      const params = new URLSearchParams(window.location.search);
+      const resumeId = params.get('run_id');
+      if (resumeId) {
+        currentRunId = resumeId;
+        checkoutTabOpened = true;
+        document.getElementById('start-btn').disabled = true;
+        poll();
+      }
+    })();
   </script>
 </body>
 </html>

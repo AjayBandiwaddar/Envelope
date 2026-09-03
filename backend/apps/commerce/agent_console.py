@@ -81,7 +81,7 @@ def get_server_params() -> StdioServerParameters:
     return StdioServerParameters(command=sys.executable, args=[str(MANAGE_PY), "run_mcp_server"], env=env)
 
 
-async def ask_gemini(client: genai.Client, session: ClientSession, prompt: str, system_instruction: str, retries: int = 2):
+async def ask_gemini(client: genai.Client, session: ClientSession, prompt: str, system_instruction: str, retries: int = 1):
     last_exc = None
     for attempt in range(retries + 1):
         try:
@@ -96,7 +96,7 @@ async def ask_gemini(client: genai.Client, session: ClientSession, prompt: str, 
             )
         except Exception as exc:
             last_exc = exc
-            if "503" in str(exc) or "UNAVAILABLE" in str(exc):
+            if attempt < retries:
                 await asyncio.sleep(5)
                 continue
             raise
@@ -360,13 +360,33 @@ def _wait_for_decision(run_id: str, kind: str) -> str:
         return _runs[run_id]["decision_value"]
 
 
+def _unwrap_exception(exc: BaseException) -> str:
+    """ExceptionGroup/TaskGroup wrapping hides the real error several
+    layers deep - drill down to the innermost real message."""
+    seen = []
+    current = exc
+    for _ in range(10):
+        seen.append(f"{type(current).__name__}: {current}")
+        inner = getattr(current, "exceptions", None)
+        if inner:
+            current = inner[0]
+            continue
+        cause = current.__cause__ or current.__context__
+        if cause and cause is not current:
+            current = cause
+            continue
+        break
+    return " -> ".join(seen)
+
+
 def _run_pipeline_thread(run_id: str, prompt: str):
     try:
         asyncio.run(_run_pipeline_async(run_id, prompt))
-    except Exception as exc:
-        _log(run_id, f"Failed: {exc}", stage="ERROR")
+    except BaseException as exc:
+        real_error = _unwrap_exception(exc)
+        _log(run_id, f"Failed: {real_error}", stage="ERROR")
         with _runs_lock:
-            _runs[run_id]["error"] = str(exc)
+            _runs[run_id]["error"] = real_error
             _runs[run_id]["done"] = True
 
 
