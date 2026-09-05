@@ -1,8 +1,8 @@
-# Envelope — Agentic Commerce with Cryptographic, Bounded Authorization
+# Envelope - Agentic Commerce with Cryptographic, Bounded Authorization
 
 **Built for Razorpay AI Buildathon 2026 — Track 1: AI Growth & Agentic Commerce**
 
-> AI decides what it wants to buy. The merchant determines what is actually true and available. The authorization system determines what the agent is allowed to do. Razorpay determines the payment outcome. The system records the proof.
+> An AI agent can genuinely shop and pay a real merchant, end to end, but it can never authorize its own spending. Every money relevant step is checked by a deterministic authorization firewall, backed by a cryptographically signed proof of exactly what was approved, with every decision - allowed or denied - permanently recorded.
 
 ![Architecture diagram](architecture.svg)
 
