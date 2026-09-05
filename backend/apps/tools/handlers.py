@@ -9,11 +9,11 @@ mocks - no real orders, customers, or emails exist anywhere.
 Simplifying assumption (documented per AGENTS.md's "document the
 ambiguity" instruction): for these six default tools, tool_id equals
 the action name (e.g. tool_id="refund_order", action="refund_order").
-POLICY_SPEC.md's terminology section allows tool_id and action to be
+docs/legacy/POLICY_SPEC.md's terminology section allows tool_id and action to be
 distinct concepts, and a production system might register one tool
 with multiple actions - but the six named mocks here are each a single
 action, so a 1:1 tool_id/action mapping keeps the demo data simple
-without losing anything POLICY_SPEC.md requires.
+without losing anything docs/legacy/POLICY_SPEC.md requires.
 
 Each handler is a pure function: arguments in, a JSON-serializable
 result out. No handler has any side effect outside the in-memory/DB
